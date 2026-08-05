@@ -38,16 +38,16 @@ def render_chart_page(c, milestone_label, song_title, artist_name):
     )
 
 def years_10(c, ctx):
-    render_chart_page(c, "10 YRS AGO", "CLOSER", "THE CHAINSMOKERS FT. HALSEY")
+    render_chart_page(c, "#1 SONG - 10 YRS AGO", "CLOSER", "THE CHAINSMOKERS FT. HALSEY")
 
 def years_20(c, ctx):
-    render_chart_page(c, "20 YRS AGO", "PROMISCUOUS", "NELLY FURTADO FT. TIMBALAND")
+    render_chart_page(c, "#1 SONG - 20 YRS AGO", "PROMISCUOUS", "NELLY FURTADO FT. TIMBALAND")
 
 def years_30(c, ctx):
-    render_chart_page(c, "30 YRS AGO", "MACARENA", "LOS DEL RIO")
+    render_chart_page(c, "#1 SONG - 30 YRS AGO", "MACARENA", "LOS DEL RIO")
 
 def years_40(c, ctx):
-    render_chart_page(c, "40 YRS AGO", "SLEDGEHAMMER", "PETER GABRIEL")
+    render_chart_page(c, "#1 SONG - 40 YRS AGO", "SLEDGEHAMMER", "PETER GABRIEL")
 
 def years_50(c, ctx):
-    render_chart_page(c, "50 YRS AGO", "DON'T GO BREAKING MY HEART", "ELTON JOHN & KIKI DEE")
+    render_chart_page(c, "#1 SONG - 50 YRS AGO", "DON'T GO BREAKING MY HEART", "ELTON JOHN & KIKI DEE")
