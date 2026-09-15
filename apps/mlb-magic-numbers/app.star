@@ -5,12 +5,11 @@
 # many combined losses/leader-wins puts them out). Scoped to one league at
 # a time (AL/NL dropdown input) rather than both - the 8-page platform
 # limit doesn't stretch to 3 divisions + wild card for both leagues at
-# once, and a single-league instance leaves headroom for whatever else
-# gets added later. 7 pages: intro, a leaders summary (all 3 division
-# leaders with their division AND playoff-clinch magic numbers side by
-# side), 3 "chasers" pages (every non-division-leader in the league, pooled
-# across all 3 divisions and sorted by record - not grouped by division),
-# a home-field page (which division leader is on track for home field
+# once. 8 pages: intro, a leaders summary (all 3 division leaders with
+# their division AND playoff-clinch magic numbers side by side), 4
+# "chasers" pages (every non-division-leader in the league, pooled across
+# all 3 divisions and sorted by record - not grouped by division), a
+# home-field page (which division leader is on track for home field
 # advantage through the whole league playoffs), and a bye page (which two
 # of the three are on track for a first-round bye). Both of those last two
 # are 3-team races among the leaders, not the simple 2-team cutoffs
@@ -18,6 +17,18 @@
 # homefield_status and bye_status for the math. A dedicated wild-card
 # standings page was here too but is dropped for now - easy to re-add
 # later, same pattern as everything else.
+#
+# DESIGN. A dark scoreboard. Black ground; a gold league chip up top with
+# the page title beside it and quiet gray column labels; then three
+# team-colored pills down the left with their numbers on black to the
+# right. The numbers are the hero - 5x7, in their status color - and the
+# outcomes that matter most (clinched, eliminated, and anything within
+# URGENT_THRESHOLD of either) become filled pills so they jump out across
+# a room. 6 px of padding on both sides keeps the app from merging with
+# its neighbors in the scroll stream. Every page is the same 7 px header
+# plus three 7 px rows on 1 px gaps (y 8/16/24), so text on every pill
+# gets an even 1 px of padding top and bottom - four rows plus a header
+# can't do that in 32 px, which is why the 12 chasers take 4 pages of 3.
 #
 # Data from MLB's own public Stats API (statsapi.mlb.com) - no key required.
 # Sibling app to mlb-playoff-picture - same standings endpoint. Division
@@ -89,18 +100,59 @@ PLAYOFF_COLOR = "#3498DB"
 TRAGIC_COLOR = "#F39C12"
 
 # A magic/tragic number this low means it's basically about to happen - it
-# looked identical to a lazy mid-teens number before this. See draw_status.
+# looked identical to a lazy mid-teens number before this. See draw_value.
 URGENT_THRESHOLD = 5
 
-# The intro page's sparkle color, reused for the tiny "IN"/"WON" glint in
-# draw_status - the one purely decorative gold accent in the app, so it
-# never gets mistaken for a status color like CLINCH/ELIM/TRAGIC.
+# The one purely decorative gold accent in the app - the league chip, the
+# intro sparkles, and the glint on a clinched pill - so it never gets
+# mistaken for a status color like CLINCH/ELIM/TRAGIC.
 SPARKLE_COLOR = "#FFD700"
+SEAM_RED = "#E0302A"
 
-# A darker red than ELIM_COLOR, used only for an urgent tragic number's own
-# digits - ELIM_COLOR is tuned for white/black text on TOP of it as a badge
-# background, not for reading as text against the gold urgent badge itself.
-URGENT_TRAGIC_TEXT = "#B71C1C"
+# ---------- layout ----------
+
+PAD_L = 6    # first lit column
+PAD_R = 121  # last lit column (128 - 1 - 6)
+
+# Header y 0-6, then three 7 px rows on 1 px gaps: 8-14, 16-22, 24-30.
+ROW_TOPS = [8, 16, 24]
+ROWS_PER_PAGE = 3
+
+# Team pills run PAD_L..TEAM_X1. The two number columns are centered on
+# COL_A / COL_B: the widest thing either can hold is the ELIM pill ('ELIM'
+# is 19 px in 4x5, 23 px with padding), which centered on 110 spans 99-121
+# (flush with PAD_R) and centered on 84 spans 73-95 - leaving a 3 px gap
+# after the team pill and 3 px between the two columns.
+TEAM_X1 = 69
+COL_A = 84
+COL_B = 110
+
+LABEL_COLOR = "#6E7A94"
+DASH_COLOR = "#505050"
+
+NODATA_BG = "#0B0C12"
+NODATA_TITLE = "#E8B04A"
+NODATA_SUB = "#6A7090"
+NODATA_FONTS = ["10x16", "6x8", "5x7", "4x5"]
+FONTH = {"10x16": 16, "7x12": 12, "6x8": 8, "5x7": 7, "4x5": 5}
+
+BASEBALL = """
+.....WWWWW.....
+...WWWWWWWWW...
+..WRWWWWWWWRW..
+.WWRWWWWWWWRWW.
+.WWWRWWWWWRWWW.
+WWWWRWWWWWRWWWW
+WWWWWRWWWRWWWWW
+WWWWWRWWWRWWWWW
+WWWWWRWWWRWWWWW
+WWWWRWWWWWRWWWW
+.WWWRWWWWWRWWW.
+.WWRWWWWWWWRWW.
+..WRWWWWWWWRW..
+...WWWWWWWWW...
+.....WWWWW.....
+"""
 
 # ---------- color helpers (ported from mlb-playoff-picture) ----------
 
@@ -131,6 +183,13 @@ def text_color_for(team_id):
     # at all - white text on those reads weak. Fall back to black above this
     # brightness instead of assuming white always works.
     if brightness(badge_color(team_id)) > 150:
+        return "black"
+    return "white"
+
+def text_color_on(bg):
+    # Same flip for the status pills, at 140 rather than 150: CLINCH_COLOR
+    # (brightness 146) reads far better with black digits than white.
+    if brightness(bg) > 140:
         return "black"
     return "white"
 
@@ -201,7 +260,7 @@ def wildcard_block(records, league_id):
 # The API only includes "magicNumber" at all for the division's current
 # leader - everyone else gets an eliminationNumberDivision instead (the
 # same stat sports pages print as "E#"). "ELIM" (no countdown left) renders
-# as a red badge via draw_status, not text, once a team's actually out.
+# as a red pill via draw_value, not text, once a team's actually out.
 def magic_status(t):
     # Only ever called by the leaders page, so "WON" (division-specific,
     # since this is the DIV column) is safe to hardcode here rather than
@@ -273,89 +332,6 @@ def playoff_or_tragic(t, wc_teams):
     if text == "IN" or text == "ELIM" or text == "-":
         return text, color
     return magic_or_tragic(t, int(text), color)
-
-def draw_status(c, x_right, y, text, color, font):
-    # ELIM/IN/WON render as filled badges (red/green), not colored text -
-    # much more visually distinct at a glance than plain-colored text would
-    # be. "WON" is the leaders page's DIV-column and page-2-only relabel of
-    # "IN" (see draw_leaders_page and magic_status). A plain number gets the
-    # same gold badge as the "IN"/"WON" glint once it's down to
-    # URGENT_THRESHOLD or less - the countdown isn't over yet, but it's
-    # close enough to be the most newsworthy thing on the row - except the
-    # digits themselves stay green/red (whichever terminal color it's headed
-    # for), so the row previews its own outcome instead of just glowing gold
-    # generically. "-" (no data / not applicable) is the only case that
-    # stays plain text.
-    urgent_text_color = None
-    if text == "ELIM":
-        bg = ELIM_COLOR
-    elif text == "IN" or text == "WON":
-        bg = CLINCH_COLOR
-    elif text not in ("-", "", None) and int(text) <= URGENT_THRESHOLD:
-        bg = SPARKLE_COLOR
-        urgent_text_color = URGENT_TRAGIC_TEXT if color == TRAGIC_COLOR else CLINCH_COLOR
-    else:
-        c.text(text, x_right, y, font = font, color = color, align = "right")
-        return
-    w = c.text_width(text, font)
-    tc = urgent_text_color if urgent_text_color != None else ("white" if brightness(bg) < 150 else "black")
-    badge_bottom = y + 6 if font == "4x7" else y + 4
-    c.rect(x_right - w - 1, y - 1, x_right, badge_bottom, fill = bg)
-    c.text(text, x_right, y, font = font, color = tc, align = "right")
-
-    # A tiny gold glint in the badge's own top-right corner (never outside
-    # its own pixels, so it's safe under any row spacing) celebrates an
-    # actual clinch - "IN"/"WON" only, not the merely-close preview above.
-    if text == "IN" or text == "WON":
-        c.pixel(x_right, y - 1, SPARKLE_COLOR)
-        c.pixel(x_right - 1, y - 1, SPARKLE_COLOR)
-
-def draw_page_edges(c, left = True):
-    # A 1px light line marking a clean page break while the kiosk scrolls
-    # horizontally between pages. Only page 1 (intro) draws a left edge too -
-    # otherwise a page's right border and the next page's left border would
-    # double up into a 2px-thick seam at every transition.
-    if left:
-        c.rect(0, 0, 0, c.height - 1, fill = "gray")
-    c.rect(c.width - 1, 0, c.width - 1, c.height - 1, fill = "gray")
-
-def fit_text(c, text, font, maxw):
-    # Truncates on actual pixel width, not a guessed character count - long
-    # nicknames like "Diamondbacks" would otherwise run into the numbers.
-    if c.text_width(text, font) <= maxw:
-        return text
-    for i in range(len(text), 0, -1):
-        candidate = text[:i] + "..."
-        if c.text_width(candidate, font) <= maxw:
-            return candidate
-    return "..."
-
-# Same two-column x-positions as the leaders page's DIV/WC (90 and 125) -
-# "like it is on page 2", per request. Team color stops at the same 80 too.
-TWO_COL_START = 80
-
-def draw_wc_row(c, y, team_id, nickname, wc_text, wc_color, font = "4x5"):
-    # Same single value as before (playoff_or_tragic gives one result per
-    # team), but now split across two columns instead of one combined
-    # "WC/E#" - a magic number or IN lands in the WC column with a dash
-    # in E#, and a tragic number or ELIM lands in E# with a dash in WC.
-    # They're mutually exclusive, never both filled.
-    # 4x5 and 4x7 share identical glyph widths (only height differs), so
-    # callers with vertical room to spare (homefield/bye, 3 rows on an 8px
-    # step) can pass font="4x7" for bigger text; the tightly-packed chasers
-    # pages (4 rows on a 6px step) stay at the 4x5 default.
-    row_bottom = y + 6 if font == "4x7" else y + 4
-    tc = text_color_for(team_id)
-    c.rect(0, y - 1, TWO_COL_START - 1, row_bottom, fill = badge_color(team_id))
-    nick = fit_text(c, nickname.upper(), font, TWO_COL_START - 10)
-    c.text(nick, 3, y, font = font, color = tc, align = "left")
-
-    if wc_text == "ELIM" or wc_color == TRAGIC_COLOR:
-        draw_status(c, 90, y, "-", "gray", font)
-        draw_status(c, 125, y, wc_text, wc_color, font)
-    else:
-        draw_status(c, 90, y, wc_text, wc_color, font)
-        draw_status(c, 125, y, "-", "gray", font)
 
 def sort_by_pct(teams):
     # Small manual sort - Starlark has no sorted(..., key=...). Winning
@@ -449,54 +425,160 @@ def bye_status(x, others):
         return str(elim), TRAGIC_COLOR
     return str(magic), MAGIC_COLOR
 
-def draw_chasers_page(c, ctx, league, page_index, label):
-    # 10 non-leader teams per league, 4 per page - pages 3/4/5 are just
-    # sequential chunks of one combined, record-sorted list, not tied to
-    # any particular division anymore.
-    c.fill("black")
+# A magic-side (non-tragic) team isn't remotely in elimination danger, so it
+# sorts above any real E# - "IN" (already clinched, no elimination number
+# even applies) sorts above that, and "ELIM" sorts to the very bottom below
+# every real number. Only used for the home-field page (sort_by_e_number) -
+# the bye page keeps the simpler two-bucket order below.
+def e_number_sort_key(text, color):
+    if text == "IN":
+        return 999999
+    if text == "ELIM":
+        return -1
+    if color == TRAGIC_COLOR:
+        return int(text)
+    return 999998
+
+# ---------- drawing ----------
+
+def fit_text(c, text, font, maxw):
+    # Truncates on actual pixel width, not a guessed character count - long
+    # nicknames like "Diamondbacks" would otherwise run into the numbers.
+    if c.text_width(text, font) <= maxw:
+        return text
+    for i in range(len(text), 0, -1):
+        candidate = text[:i] + ".."
+        if c.text_width(candidate, font) <= maxw:
+            return candidate
+    return ".."
+
+def centered_x(c, text, font, cx):
+    return cx - c.text_width(text, font) // 2
+
+def draw_header(c, league, title, col_a, col_b):
+    # Gold league chip (2 px side padding, 1 px top/bottom), the page title
+    # 3 px after it in white, and the column labels in quiet gray centered
+    # over the columns they name.
+    w = c.text_width(league, "4x5")
+    c.round_rect(PAD_L, 0, PAD_L + w + 3, 6, 1, fill = SPARKLE_COLOR)
+    c.text(league, PAD_L + 2, 1, font = "4x5", color = "black")
+    c.text(title, PAD_L + w + 7, 1, font = "4x5", color = "white")
+    c.text(col_a, centered_x(c, col_a, "4x5", COL_A), 1, font = "4x5", color = LABEL_COLOR)
+    c.text(col_b, centered_x(c, col_b, "4x5", COL_B), 1, font = "4x5", color = LABEL_COLOR)
+
+def draw_pill(c, cx, y, text, bg, glint = False):
+    # A 7 px status pill, text centered with even padding. Single digits get
+    # 3 px a side so a lone "4" still reads as a pill, not a square.
+    w = c.text_width(text, "4x5")
+    pad = 3 if w < 8 else 2
+    pw = w + pad * 2
+    x0 = cx - pw // 2
+    x1 = x0 + pw - 1
+    c.round_rect(x0, y, x1, y + 6, 1, fill = bg)
+    c.text(text, x0 + pad, y + 1, font = "4x5", color = text_color_on(bg))
+
+    # A tiny gold glint in the pill's own top-right corner (never outside
+    # its own pixels, so it's safe under any row spacing) celebrates an
+    # actual clinch - "IN"/"WON" only, not the merely-close pills.
+    if glint:
+        c.pixel(x1, y, SPARKLE_COLOR)
+        c.pixel(x1 - 1, y, SPARKLE_COLOR)
+        c.pixel(x1, y + 1, SPARKLE_COLOR)
+
+def draw_value(c, cx, y, text, color):
+    # ELIM/IN/WON render as filled pills (red/green), not colored text -
+    # much more visually distinct at a glance. A plain number becomes a pill
+    # in its own status color once it's down to URGENT_THRESHOLD or less -
+    # the countdown isn't over yet, but it's close enough to be the most
+    # newsworthy thing on the row, and the color still previews which way
+    # it's headed. "-" (no data / not applicable) is a quiet 3 px dash.
+    if text in ("-", "", None):
+        c.hline(cx - 1, y + 3, 3, DASH_COLOR)
+    elif text == "ELIM":
+        draw_pill(c, cx, y, text, ELIM_COLOR)
+    elif text == "IN" or text == "WON":
+        draw_pill(c, cx, y, text, CLINCH_COLOR, glint = True)
+    elif color.startswith("#") and int(text) <= URGENT_THRESHOLD:
+        draw_pill(c, cx, y, text, color)
+    else:
+        c.text(text, centered_x(c, text, "5x7", cx), y, font = "5x7", color = color)
+
+def draw_team_pill(c, y, team_id, nickname):
+    # 3 px of padding inside both ends; "GUARDIANS"/"NATIONALS" are 43 px in
+    # 4x5, well inside the 58 px budget, but fit_text still guards it.
+    c.round_rect(PAD_L, y, TEAM_X1, y + 6, 1, fill = badge_color(team_id))
+    nick = fit_text(c, nickname.upper(), "4x5", TEAM_X1 - PAD_L - 5)
+    c.text(nick, PAD_L + 3, y + 1, font = "4x5", color = text_color_for(team_id))
+
+def draw_race_row(c, y, team_id, nickname, text, color):
+    # playoff_or_tragic / the leader-race status functions give one result
+    # per team, split across two columns: a magic number or IN lands in
+    # column A with a dash in E#, and a tragic number or ELIM lands in E#
+    # with a dash in column A. They're mutually exclusive, never both filled.
+    draw_team_pill(c, y, team_id, nickname)
+    if text == "ELIM" or color == TRAGIC_COLOR:
+        draw_value(c, COL_A, y, "-", "gray")
+        draw_value(c, COL_B, y, text, color)
+    else:
+        draw_value(c, COL_A, y, text, color)
+        draw_value(c, COL_B, y, "-", "gray")
+
+def message(c, title, sub, title_color):
+    # The shared no-data card: a title from the NODATA_FONTS ladder over a
+    # dim 4x5 sub, the pair centered as one block so they can never overlap.
+    c.fill(NODATA_BG)
+    font = NODATA_FONTS[-1]
+    for f in NODATA_FONTS:
+        if c.text_width(title, f) <= PAD_R - PAD_L + 1:
+            font = f
+            break
+    top = (c.height - (FONTH[font] + 3 + 5)) // 2
+    c.text(title, centered_x(c, title, font, c.width // 2), top, font = font, color = title_color)
+    c.text(sub, centered_x(c, sub, "4x5", c.width // 2), top + FONTH[font] + 3, font = "4x5", color = NODATA_SUB)
+
+def offline(c):
+    message(c, "MLB OFFLINE", "RETRYING SOON", NODATA_TITLE)
+
+def no_standings(c):
+    # Not an error - the season just hasn't produced standings yet.
+    message(c, "NO STANDINGS YET", "BACK ON OPENING DAY", "white")
+
+def draw_chasers_page(c, ctx, league, page_index):
+    # 12 non-leader teams per league, 3 per page - chasers pages 1-4 are
+    # just sequential chunks of one combined, record-sorted list, not tied
+    # to any particular division.
+    c.clear()
 
     div_resp = fetch_standings("regularSeason", ctx.now.year)
     wc_resp = fetch_standings("wildCard", ctx.now.year)
     if div_resp["status_code"] != 200 or wc_resp["status_code"] != 200:
-        c.text("DATA ERROR".upper(), 4, 12, font = "5x7", color = "red", align = "left")
-        draw_page_edges(c, left = False)
+        offline(c)
         return
 
     chasers = league_chasers(div_resp["json"].get("records", []), league)
-    start = page_index * 4
-    teams = chasers[start:start + 4]
+    start = page_index * ROWS_PER_PAGE
+    teams = chasers[start:start + ROWS_PER_PAGE]
     if not teams:
-        c.text("NO DATA YET".upper(), 4, 12, font = "5x7", color = "gray", align = "left")
-        draw_page_edges(c, left = False)
+        no_standings(c)
         return
 
     wc_teams = wildcard_block(wc_resp["json"].get("records", []), LEAGUE_IDS[league])[:5]
     nicknames = team_nickname_map()
 
-    c.rect(0, 0, 127, 6, fill = "white")
-    c.text(label, 2, 1, font = "4x5", color = "black", align = "left")
-    c.text("WC", 90, 1, font = "picopixel", color = "black", align = "right")
-    c.text("E#", 125, 1, font = "picopixel", color = "black", align = "right")
-
-    y = 8
-    for t in teams:
+    draw_header(c, league, "CHASERS", "WC", "E#")
+    for i in range(len(teams)):
+        t = teams[i]
         team_id = t.get("team", {}).get("id", -1)
         wc_text, wc_color = playoff_or_tragic(t, wc_teams)
-        draw_wc_row(c, y, team_id, nicknames.get(team_id, "???"), wc_text, wc_color)
-        y += 6
-    draw_page_edges(c, left = False)
+        draw_race_row(c, ROW_TOPS[i], team_id, nicknames.get(team_id, "???"), wc_text, wc_color)
 
-def draw_leaders_page(c, ctx, league, label):
-    # Only 3 rows here (one per division leader), instead of the 5-team
-    # squeeze the other pages need - room for 4x5 instead of picopixel, and
-    # for two number columns per row instead of one.
-    c.fill("black")
+def draw_leaders_page(c, ctx, league):
+    c.clear()
 
     div_resp = fetch_standings("regularSeason", ctx.now.year)
     wc_resp = fetch_standings("wildCard", ctx.now.year)
     if div_resp["status_code"] != 200 or wc_resp["status_code"] != 200:
-        c.text("DATA ERROR".upper(), 4, 12, font = "5x7", color = "red", align = "left")
-        draw_page_edges(c, left = False)
+        offline(c)
         return
 
     div_records = div_resp["json"].get("records", [])
@@ -505,16 +587,10 @@ def draw_leaders_page(c, ctx, league, label):
     leaders = league_leaders(div_records, league)
 
     if len(leaders) < 3:
-        c.text("NO DATA YET".upper(), 4, 12, font = "5x7", color = "gray", align = "left")
-        draw_page_edges(c, left = False)
+        no_standings(c)
         return
 
     nicknames = team_nickname_map()
-
-    c.rect(0, 0, 127, 6, fill = "white")
-    c.text(label, 2, 1, font = "4x5", color = "black", align = "left")
-    c.text("DIV", 90, 1, font = "picopixel", color = "black", align = "right")
-    c.text("WC", 125, 1, font = "picopixel", color = "black", align = "right")
 
     # Rows go WC magic number low to high - whoever's closest to clinching a
     # playoff spot (not necessarily the division) leads the page. Already
@@ -542,69 +618,38 @@ def draw_leaders_page(c, ctx, league, label):
             if rows[j][0] > rows[j + 1][0]:
                 rows[j], rows[j + 1] = rows[j + 1], rows[j]
 
-    y = 9
-    for _key, team_id, div_text, div_color, playoff_text, playoff_color in rows:
-        # Team color stops before the DIV column, not the whole row - so
-        # both number columns sit on black instead of competing with the
-        # team's own color. text_color_for keeps the nickname readable
-        # against whichever color the colored portion turns out to be.
-        c.rect(0, y - 1, TWO_COL_START - 1, y + 6, fill = badge_color(team_id))
-        tc = text_color_for(team_id)
-
-        nick = fit_text(c, nicknames.get(team_id, "???").upper(), "4x7", TWO_COL_START - 10)
-        c.text(nick, 5, y, font = "4x7", color = tc, align = "left")
-
-        draw_status(c, 90, y, div_text, div_color, "4x7")
+    draw_header(c, league, "LEADERS", "DIV", "WC")
+    for i in range(n):
+        _key, team_id, div_text, div_color, playoff_text, playoff_color = rows[i]
+        y = ROW_TOPS[i]
+        draw_team_pill(c, y, team_id, nicknames.get(team_id, "???"))
+        draw_value(c, COL_A, y, div_text, div_color)
 
         # playoff_magic is shared with the chasers pages (via
         # playoff_or_tragic), which should keep "IN" - only relabel it here.
         if playoff_text == "IN":
             playoff_text = "WON"
-        draw_status(c, 125, y, playoff_text, playoff_color, "4x7")
-
-        y += 8
-    draw_page_edges(c, left = False)
-
-# A magic-side (non-tragic) team isn't remotely in elimination danger, so it
-# sorts above any real E# - "IN" (already clinched, no elimination number
-# even applies) sorts above that, and "ELIM" sorts to the very bottom below
-# every real number. Only used for the home-field page (sort_by_e_number) -
-# the bye page keeps the simpler two-bucket order below.
-def e_number_sort_key(text, color):
-    if text == "IN":
-        return 999999
-    if text == "ELIM":
-        return -1
-    if color == TRAGIC_COLOR:
-        return int(text)
-    return 999998
+        draw_value(c, COL_B, y, playoff_text, playoff_color)
 
 # Shared by the home-field and bye pages - both are "3 division leaders,
 # ranked by a pairwise magic/tragic computation" with the same visual
-# layout (renders through draw_wc_row, same as the chasers pages), the only
-# difference is which status_fn does the ranking (homefield_status vs
+# layout (renders through draw_race_row, same as the chasers pages), the
+# only difference is which status_fn does the ranking (homefield_status vs
 # bye_status) and what the left column header says.
-def draw_leader_race_page(c, ctx, league, label, col_label, status_fn, sort_by_e_number = False):
-    c.fill("black")
+def draw_leader_race_page(c, ctx, league, title, col_label, status_fn, sort_by_e_number = False):
+    c.clear()
 
     div_resp = fetch_standings("regularSeason", ctx.now.year)
     if div_resp["status_code"] != 200:
-        c.text("DATA ERROR".upper(), 4, 12, font = "5x7", color = "red", align = "left")
-        draw_page_edges(c, left = False)
+        offline(c)
         return
 
     leaders = league_leaders(div_resp["json"].get("records", []), league)
     if len(leaders) < 3:
-        c.text("NO DATA YET".upper(), 4, 12, font = "5x7", color = "gray", align = "left")
-        draw_page_edges(c, left = False)
+        no_standings(c)
         return
 
     nicknames = team_nickname_map()
-
-    c.rect(0, 0, 127, 6, fill = "white")
-    c.text(label, 2, 1, font = "4x5", color = "black", align = "left")
-    c.text(col_label, 90, 1, font = "picopixel", color = "black", align = "right")
-    c.text("E#", 125, 1, font = "picopixel", color = "black", align = "right")
 
     if sort_by_e_number:
         # Home field: E# high to low - safest team (or already-clinched)
@@ -639,62 +684,61 @@ def draw_leader_race_page(c, ctx, league, label, col_label, status_fn, sort_by_e
                 rows.append(row)
         rows += tragic_rows
 
-    y = 9
-    for team_id, nickname, text, color in rows:
-        draw_wc_row(c, y, team_id, nickname, text, color, font = "4x7")
-        y += 8
-    draw_page_edges(c, left = False)
-
-def draw_homefield_page(c, ctx, league, label):
-    draw_leader_race_page(c, ctx, league, label, "HFA", homefield_status, sort_by_e_number = True)
-
-def draw_bye_page(c, ctx, league, label):
-    draw_leader_race_page(c, ctx, league, label, "BYE", bye_status)
+    draw_header(c, league, title, col_label, "E#")
+    for i in range(len(rows)):
+        team_id, nickname, text, color = rows[i]
+        draw_race_row(c, ROW_TOPS[i], team_id, nickname, text, color)
 
 # ---------- pages ----------
+
+def sparkle(c, x, y):
+    # A 3x3 gold plus centered on (x, y).
+    c.pixel(x, y - 1, SPARKLE_COLOR)
+    c.pixel(x - 1, y, SPARKLE_COLOR)
+    c.pixel(x, y, SPARKLE_COLOR)
+    c.pixel(x + 1, y, SPARKLE_COLOR)
+    c.pixel(x, y + 1, SPARKLE_COLOR)
 
 def intro(c, ctx):
     league = league_choice(ctx)
     c.clear()
-    # "MAGIC #" used to render as just "MAGIC" - the 7x12 title font has no
-    # "#" glyph at all, so it silently vanished. Spelling it out sidesteps
-    # that instead of hunting for a font that happens to have the glyph.
-    c.text("MAGIC NUMBERS".upper(), 64, 3, font = "7x12", color = "white", align = "center")
 
-    # A little sparkle in the corners and flanking the divider - nods at the
-    # "MAGIC" in the title without competing with it; same gold as the "IN"/
-    # "WON" glint elsewhere, so it reads as pure decoration, not another
-    # status color.
-    c.rect(6, 1, 6, 1, fill = SPARKLE_COLOR)
-    c.rect(121, 2, 121, 2, fill = SPARKLE_COLOR)
-    c.rect(14, 16, 14, 16, fill = SPARKLE_COLOR)
-    c.rect(113, 16, 113, 16, fill = SPARKLE_COLOR)
+    # A 15 px baseball on the left with a couple of gold sparkles - the
+    # "magic" - and a left-aligned lockup beside it. "MAGIC NUMBERS" is
+    # 91 px in 7x12, so starting at x 28 it ends at 118, inside PAD_R.
+    # (It used to read "MAGIC #", but 7x12 has no "#" glyph at all.)
+    c.sprite(BASEBALL, PAD_L + 2, 8, legend = {"W": "white", "R": SEAM_RED})
+    sparkle(c, 23, 4)
+    c.pixel(PAD_L + 1, 26, SPARKLE_COLOR)
+    c.pixel(24, 25, SPARKLE_COLOR)
 
-    c.line(20, 18, 108, 18, "#555555")
-    c.text((league + " DIVISION & WILD CARD").upper(), 64, 21, font = "4x5", color = "gray", align = "center")
-    c.text("UPDATES EVERY 2 HOURS".upper(), 64, 27, font = "picopixel", color = "#555555", align = "center")
-    draw_page_edges(c, left = True)
+    x = 28
+    c.text("MAGIC NUMBERS", x, 2, font = "7x12", color = "white")
+
+    w = c.text_width(league, "4x5")
+    c.round_rect(x, 17, x + w + 3, 23, 1, fill = SPARKLE_COLOR)
+    c.text(league, x + 2, 18, font = "4x5", color = "black")
+    c.text("PLAYOFF RACE", x + w + 7, 18, font = "4x5", color = "gray")
+
+    c.text("UPDATES EVERY 2 HOURS", x, 26, font = "picopixel", color = "#555555")
 
 def leaders(c, ctx):
-    league = league_choice(ctx)
-    draw_leaders_page(c, ctx, league, league + " LEADERS")
+    draw_leaders_page(c, ctx, league_choice(ctx))
 
 def chasers1(c, ctx):
-    league = league_choice(ctx)
-    draw_chasers_page(c, ctx, league, 0, league + " CHASERS")
+    draw_chasers_page(c, ctx, league_choice(ctx), 0)
 
 def chasers2(c, ctx):
-    league = league_choice(ctx)
-    draw_chasers_page(c, ctx, league, 1, league + " CHASERS")
+    draw_chasers_page(c, ctx, league_choice(ctx), 1)
 
 def chasers3(c, ctx):
-    league = league_choice(ctx)
-    draw_chasers_page(c, ctx, league, 2, league + " CHASERS")
+    draw_chasers_page(c, ctx, league_choice(ctx), 2)
+
+def chasers4(c, ctx):
+    draw_chasers_page(c, ctx, league_choice(ctx), 3)
 
 def homefield(c, ctx):
-    league = league_choice(ctx)
-    draw_homefield_page(c, ctx, league, league + " HOME FIELD")
+    draw_leader_race_page(c, ctx, league_choice(ctx), "HOME FIELD", "HFA", homefield_status, sort_by_e_number = True)
 
 def bye(c, ctx):
-    league = league_choice(ctx)
-    draw_bye_page(c, ctx, league, league + " BYE")
+    draw_leader_race_page(c, ctx, league_choice(ctx), "BYE", "BYE", bye_status)
