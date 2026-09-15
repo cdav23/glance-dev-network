@@ -1,7 +1,7 @@
 id: mlb-pitching-leaders
 name: MLB Pitching Leaders
 author: cfdmb
-description: Top 4 pitching leaders by category, for MLB, AL, or NL.
+description: Top 3 pitching leaders by category, for MLB, AL, or NL.
 category: Sports
 width: 128
 height: 32
