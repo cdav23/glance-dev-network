@@ -300,6 +300,86 @@ def near_term_label(name):
     else:
         return None
 
+# ---------- DEMO sample data ----------
+# Typing the literal token DEMO swaps every fetch below for these canned
+# responses (a mild, partly cloudy afternoon with a storm cell nearby), so
+# the catalog previews show the real layout instead of the setup message.
+# A panel with no token at all still gets "SET API TOKEN". This never fires
+# by accident - a real user has to type DEMO on purpose.
+
+DEMO_TOKEN = "DEMO"
+DEMO_TS = 1790192700  # 2:45 PM local at tz -300
+DEMO_TZ_MIN = -300
+
+def is_demo_token(token):
+    return str(token).strip().upper() == DEMO_TOKEN
+
+DEMO_OBSERVATION = {"status_code": 200, "json": {"obs": [{
+    "timestamp": DEMO_TS,
+    "air_temperature": 22.8,
+    "relative_humidity": 58,
+    "station_pressure": 1016.2,
+    "pressure_trend": "rising",
+    "precip_accum_local_day": 4.3,
+    "precip_accum_last_1hr": 1.8,
+    "precip_accum_local_yesterday_final": 14.7,
+    "lightning_strike_last_epoch": DEMO_TS - 12 * 60,
+    "lightning_strike_last_distance": 11,
+    "lightning_strike_count_last_1hr": 14,
+    "lightning_strike_count_last_3hr": 41,
+    "uv": 4.2,
+    "solar_radiation": 512,
+    "brightness": 61400,
+}]}}
+
+DEMO_BETTER_FORECAST = {"status_code": 200, "json": {"current_conditions": {
+    "air_temperature": 22.8,
+    "feels_like": 24.1,
+    "dew_point": 14.1,
+    "relative_humidity": 58,
+    "station_pressure": 30.01,
+    "pressure_trend": "rising",
+    "icon": "partly-cloudy-day",
+    "wind_avg": 12,
+    "wind_direction": 225,
+    "wind_gust": 19,
+}}}
+
+# Positional obs_st rows: [epoch, lull, avg, gust, dir, interval, pressure,
+# temp, rh, lux, uv, solar, rain_mm]. Wind reads the day's max gust
+# (index 3), rainfall2 sums the month's rain (index 12).
+DEMO_DEVICE_OBS = {"status_code": 200, "json": {"obs": [
+    [DEMO_TS - 86400 * 9, 1.0, 2.1, 4.0, 200, 60, 1014.0, 19.0, 70, 0, 0, 0, 22.4],
+    [DEMO_TS - 86400 * 4, 1.2, 2.6, 5.1, 210, 60, 1012.0, 20.0, 74, 0, 0, 0, 18.6],
+    [DEMO_TS - 86400, 0.8, 1.9, 3.8, 190, 60, 1011.0, 18.0, 88, 0, 0, 0, 14.7],
+    [DEMO_TS - 7200, 2.4, 4.6, 9.8, 230, 60, 1015.0, 22.0, 60, 0, 0, 0, 2.5],
+    [DEMO_TS - 600, 3.1, 5.4, 11.2, 225, 60, 1016.2, 22.8, 58, 0, 0, 0, 1.8],
+]}}
+
+DEMO_NWS_FORECAST = {"status_code": 200, "json": {"properties": {"periods": [
+    {"name": "This Afternoon", "startTime": "2026-09-23T14:00:00-05:00", "isDaytime": True, "temperature": 77, "shortForecast": "Chance Showers And Thunderstorms", "probabilityOfPrecipitation": {"value": 40}},
+    {"name": "Tonight", "startTime": "2026-09-23T18:00:00-05:00", "isDaytime": False, "temperature": 61, "shortForecast": "Partly Cloudy", "probabilityOfPrecipitation": {"value": 10}},
+    {"name": "Thursday", "startTime": "2026-09-24T06:00:00-05:00", "isDaytime": True, "temperature": 81, "shortForecast": "Sunny", "probabilityOfPrecipitation": {"value": 0}},
+]}}}
+
+DEMO_ALMANAC = {"status_code": 200, "json": {"properties": {"data": {
+    "curphase": "Waxing Gibbous",
+    "fracillum": "78%",
+    "moondata": [{"phen": "Rise", "time": "16:12"}, {"phen": "Set", "time": "01:48"}],
+    "sundata": [{"phen": "Rise", "time": "06:58"}, {"phen": "Set", "time": "19:04"}],
+}}}}
+
+DEMO_STATION = {
+    "token": DEMO_TOKEN,
+    "demo": True,
+    "station_id": 0,
+    "device_id": 0,
+    "name": "BACKYARD",
+    "lat": 39.1,
+    "lon": -94.6,
+    "tz_offset_min": DEMO_TZ_MIN,
+}
+
 # ---------- network ----------
 
 def fetch_stations(token):
@@ -310,6 +390,8 @@ def fetch_stations(token):
     )
 
 def fetch_observation(token, station_id):
+    if is_demo_token(token):
+        return DEMO_OBSERVATION
     return http.get(
         "https://swd.weatherflow.com/swd/rest/observations/station/" + str(station_id),
         params = {
@@ -322,6 +404,8 @@ def fetch_observation(token, station_id):
     )
 
 def fetch_device_observations(token, device_id, time_start, time_end):
+    if is_demo_token(token):
+        return DEMO_DEVICE_OBS
     return http.get(
         "https://swd.weatherflow.com/swd/rest/observations/device/" + str(device_id),
         params = {
@@ -333,6 +417,8 @@ def fetch_device_observations(token, device_id, time_start, time_end):
     )
 
 def fetch_better_forecast(token, station_id):
+    if is_demo_token(token):
+        return DEMO_BETTER_FORECAST
     return http.get(
         "https://swd.weatherflow.com/swd/rest/better_forecast",
         params = {
@@ -376,6 +462,8 @@ def resolve_station(ctx):
     token = _s(ctx, "token", "")
     if not token:
         return None, "no token"
+    if is_demo_token(token):
+        return DEMO_STATION, None
 
     resp = fetch_stations(token)
     if resp["status_code"] != 200:
@@ -1913,17 +2001,20 @@ def forecast(c, ctx):
     time_str = epoch_to_local_hhmm(ts, station["tz_offset_min"])
     draw_header(c, station["name"], time_str)
 
-    points_resp = fetch_nws_points(station["lat"], station["lon"])
-    if points_resp["status_code"] != 200:
-        draw_forecast_unavailable(c)
-        return
+    if station.get("demo"):
+        fc_resp = DEMO_NWS_FORECAST
+    else:
+        points_resp = fetch_nws_points(station["lat"], station["lon"])
+        if points_resp["status_code"] != 200:
+            draw_forecast_unavailable(c)
+            return
 
-    forecast_url = points_resp["json"].get("properties", {}).get("forecast", None)
-    if forecast_url == None:
-        draw_forecast_unavailable(c)
-        return
+        forecast_url = points_resp["json"].get("properties", {}).get("forecast", None)
+        if forecast_url == None:
+            draw_forecast_unavailable(c)
+            return
 
-    fc_resp = fetch_nws_forecast(forecast_url)
+        fc_resp = fetch_nws_forecast(forecast_url)
     if fc_resp["status_code"] != 200:
         draw_forecast_unavailable(c)
         return
@@ -2140,7 +2231,10 @@ def almanac(c, ctx):
     # One retry costs nothing on the (normal) case where the first attempt
     # succeeds, and gives a second, independent 4s window to ride out a
     # one-off slow response before actually giving up.
-    resp = fetch_moon_almanac(date_str, station["lat"], station["lon"], tz_hours)
+    if station.get("demo"):
+        resp = DEMO_ALMANAC
+    else:
+        resp = fetch_moon_almanac(date_str, station["lat"], station["lon"], tz_hours)
     if resp["status_code"] != 200:
         resp = fetch_moon_almanac(date_str, station["lat"], station["lon"], tz_hours)
     if resp["status_code"] != 200:
