@@ -1609,9 +1609,9 @@ def crew_role(mission_name, crew_names, idx):
 
 # Shuttle landing site -> (display name, timezone).
 LANDING_SITE_INFO = {
-    "KSC": ("KSC", "EASTERN"),
-    "EDW": ("EDWARDS AFB", "PACIFIC"),
-    "WSSH": ("WSSH", "MOUNTAIN"),
+    "KSC": ("KENNEDY SPACE CENTER", "EASTERN"),
+    "EDW": ("EDWARDS AIR FORCE BASE", "PACIFIC"),
+    "WSSH": ("WHITE SANDS SPACE HARBOR", "MOUNTAIN"),
 }
 
 # Ocean -> (display name, timezone). Atlantic and Gulf read as Eastern
@@ -2016,21 +2016,6 @@ def draw_text_apostrophes(c, text, cx, y, font, color):
             x += 3
 
 
-def fit_text(c, text, fonts, maxw):
-    if maxw < 4:
-        return "", fonts[len(fonts) - 1]
-    for i in range(len(fonts)):
-        f = fonts[i]
-        if c.text_width(text, font = f) <= maxw:
-            return text, f
-    f = fonts[len(fonts) - 1]
-    for i in range(len(text), 0, -1):
-        t = text[:i] + ".."
-        if c.text_width(t, font = f) <= maxw:
-            return t, f
-    return "", f
-
-
 # Biggest font in the ladder that fits every string, so multi-line
 # messages share one size.
 def shared_font(c, texts, fonts, maxw):
@@ -2343,25 +2328,6 @@ PATCH_BG_ROWS = {
 }
 
 
-# Draws a mission's patch background; False if it has none.
-def draw_patch_background(c, name):
-    data = PATCH_BG_ROWS.get(name)
-    if data == None:
-        return False
-    x = 0
-    y = 0
-    for i in range(len(data) // 8):
-        j = i * 8
-        run = int(data[j:j + 2], 16) + 1
-        c.rect(x, y, x + run - 1, y + PATCH_BAND_H - 1, fill = "#" + data[j + 2:j + 8])
-        x += run
-        if x >= 128:
-            x = 0
-            y += PATCH_BAND_H
-    return True
-
-
-# Outlined version of a wrapped text block.
 def draw_wrapped_fit_outlined(c, text, x, y, w, color, avail_h, center = False):
     for font, height in WRAPPED_FONT_LADDER:
         max_lines = avail_h // height
@@ -2467,8 +2433,8 @@ def draw_moon_page(c, ctx, page):
 
     if page == 3:
         stay = utc_abs(info["liftoff"]) - utc_abs(MOON_LANDING_TIME[name])
-        draw_outlined_text(c, "LM TIME ON THE MOON", 64, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
-        draw_duration(c, 64, 13, stay, "amber", num_font = "10x14", num_h = 14)
+        draw_outlined_text(c, "LM TIME ON THE MOON", 96, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_duration(c, 96, 13, stay, "amber", num_font = "10x14", num_h = 14)
     elif page == 4:
         n = len(info["evas"])
         total = 0
@@ -2477,19 +2443,19 @@ def draw_moon_page(c, ctx, page):
         # "EVA TIME" = NASA's official depress-to-repress clock; page 5's
         # TIME ON THE SURFACE is each man's boots on the ground.
         label = "EVA TIME - " + str(n) + (" EVA" if n == 1 else " EVAS")
-        draw_outlined_text(c, label, 64, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
-        draw_duration(c, 64, 13, total, "amber", num_font = "10x14", num_h = 14)
+        draw_outlined_text(c, label, 96, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_duration(c, 96, 13, total, "amber", num_font = "10x14", num_h = 14)
     elif page == 5:
-        draw_outlined_text(c, "TIME ON THE SURFACE", 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_outlined_text(c, "TIME ON THE SURFACE", 96, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
         rows = MOON_BOOTS.get(name, [])
         for i in range(len(rows)):
             who, secs = rows[i]
             y = 11 + i * 11
-            draw_outlined_text(c, who, 3, y, "5x7", "white", align = "left")
-            hm = str(secs // 3600) + "H " + str(secs % 3600 // 60) + "M"
-            draw_outlined_text(c, hm, 125, y, "5x7", "amber", align = "right")
+            draw_outlined_text(c, moonwalker_name(mission, who), 3, y, "5x7", "white", align = "left")
+            hm = str(secs // 3600) + " HRS " + str(secs % 3600 // 60) + " MIN"
+            draw_outlined_text(c, hm, 189, y, "5x7", "amber", align = "right")
     elif page == 6:
-        draw_outlined_text(c, "MOON ROCKS RETURNED", 64, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_outlined_text(c, "MOON ROCKS RETURNED", 96, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
         # "10x14" has no "." glyph -- draw the whole and tenths parts
         # separately with a 2x2 dot (outlined like the digits) between.
         whole, tenths = info["rocks_lb"].split(".")
@@ -2497,7 +2463,7 @@ def draw_moon_page(c, ctx, page):
         tw = c.text_width(tenths, font = "10x14")
         uw = c.text_width("LBS", font = "5x7")
         total = ww + 2 + 2 + 2 + tw + 3 + uw
-        x = 64 - total // 2
+        x = 96 - total // 2
         draw_outlined_text(c, whole, x, 13, "10x14", "amber", align = "left")
         dx = x + ww + 2
         c.rect(dx - 1, 24, dx + 2, 27, fill = "#000000")
@@ -2507,18 +2473,18 @@ def draw_moon_page(c, ctx, page):
     elif page == 7:
         y, mo, d, h, mi, sec = info["liftoff"]
         ly, lmo, ld, lh, lmin, abbr = utc_to_local(y, mo, d, h, mi, "CENTRAL")
-        draw_outlined_text(c, "LIFTOFF FROM THE MOON", 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_outlined_text(c, "LIFTOFF FROM THE MOON", 96, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
         date_str = MONTH_ABBR[lmo - 1] + " " + str(ld) + ", " + str(ly)
-        draw_outlined_text(c, date_str, 64, 10, "5x7", "white", align = "center")
-        draw_outlined_text(c, format_clock(lh, lmin, sec) + " " + abbr, 64, 21, "6x8", "amber", align = "center")
+        draw_outlined_text(c, date_str, 96, 10, "5x7", "white", align = "center")
+        draw_outlined_text(c, format_clock(lh, lmin, sec) + " " + abbr, 96, 21, "6x8", "amber", align = "center")
     elif page == 8:
         p8 = info["p8"]
         if p8[0] == "ORBITS":
-            draw_outlined_text(c, "LUNAR ORBITS", 64, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
-            draw_outlined_text(c, str(p8[1]), 64, 13, "10x14", "amber", align = "center")
+            draw_outlined_text(c, "LUNAR ORBITS", 96, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
+            draw_outlined_text(c, str(p8[1]), 96, 13, "10x14", "amber", align = "center")
         else:
-            draw_outlined_text(c, "DEEP SPACE EVA - " + p8[1], 64, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
-            draw_duration(c, 64, 13, p8[2], "amber", num_font = "10x14", num_h = 14)
+            draw_outlined_text(c, "DEEP SPACE EVA - " + moonwalker_name(mission, p8[1]), 96, 4, "4x5", PATCH_LABEL_COLOR, align = "center")
+            draw_duration(c, 96, 13, p8[2], "amber", num_font = "10x14", num_h = 14)
     return True
 
 
@@ -2546,7 +2512,7 @@ def launch_site_for(name):
     # SLC-40 and SLC-41 are at Cape Canaveral, not KSC.
     if is_commercial(name) and LAUNCH_PAD.get(name, "").startswith("SLC"):
         return "CAPE CANAVERAL"
-    return "KSC"
+    return "KENNEDY SPACE CENTER"
 
 
 # Launch pad per mission, and the landing runway for Shuttle missions.
@@ -2992,7 +2958,10 @@ def flight_sentence(mission, kind):
         site = launch_site_for(name)
         pad = LAUNCH_PAD.get(name)
         if pad != None:
-            site = site + ", PAD " + pad
+            if pad.startswith("SLC-"):
+                site = site + ", SPACE LAUNCH COMPLEX " + pad[4:]
+            else:
+                site = site + ", PAD " + pad
         clock = format_clock(local_h, local_m, lsec)
         return "LAUNCHED FROM " + site + " AT " + clock + " " + abbr + "."
 
@@ -3036,46 +3005,6 @@ def flight_sentence(mission, kind):
     _, _, _, local_h, local_m, abbr = utc_to_local(ny, nm, nd, nh, nmin, zone)
     clock = format_clock(local_h, local_m, nsec)
     return "SPLASHED DOWN IN " + ocean_name + " AT " + clock + " " + abbr + "."
-
-
-def flight(c, ctx):
-    today_month = ctx.now.month
-    today_day = ctx.now.day
-
-    events = find_flight_events(today_month, today_day)
-
-    # Both lines share one font.
-    if len(events) == 0:
-        c.fill("#000000")
-        months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
-        date_str = months[today_month - 1] + " " + str(today_day)
-        c.text("ON THIS DATE", 64, 2, font = "4x5", color = "#888888", align = "center")
-        c.text(date_str, 64, 10, font = "6x8", color = "white", align = "center")
-        c.text("NO US LAUNCHES OR LANDINGS", 64, 23, font = "4x5", color = "#888888", align = "center")
-        return
-
-    idx = rotation_index(ctx, len(events))
-    mission, kind = events[idx]
-    name = mission[0]
-
-    draw_patch_background(c, name)
-    draw_outlined_text(c, display_name(name).upper(), 2, 1, "4x5", "white", align = "left")
-    # Orbiter name between mission name and year (Shuttle only).
-    orbiter = ORBITER.get(name)
-    if orbiter != None:
-        draw_outlined_text(c, orbiter.upper(), 64, 1, "4x5", "white", align = "center")
-    draw_outlined_text(c, str(flight_year(mission, kind)), 126, 1, "4x5", "white", align = "right")
-
-    sentence = flight_sentence(mission, kind)
-
-    # True when today is the loss date, so that page turns red.
-    land_m, land_d = local_land_date(mission)
-    land_is_today = land_m == today_month and land_d == today_day
-    is_lost_today = END_LABEL_OVERRIDE.get(name) == "LOST" and land_is_today
-    text_color = LOST_COLOR if is_lost_today else "white"
-
-    # Sentence starts just under the name/year row.
-    draw_wrapped_fit_outlined(c, sentence, 2, 9, 124, text_color, 23, center = True)
 
 
 def mission_abs_times(mission):
@@ -3127,32 +3056,6 @@ def duration_width(c, groups, num_font, label_font, gap, label_gap):
     return total_w
 
 
-def draw_duration(c, cx, y, total_seconds, color, num_font = "6x8", num_h = 8):
-    groups = duration_groups(total_seconds)
-    # Unit letters in 5x7 so M and H are distinguishable.
-    label_font = "5x7"
-    label_h = 7
-
-    # Tighten spacing for long durations instead of shrinking the digits.
-    for gap, label_gap in [(4, 2), (2, 1), (1, 1)]:
-        total_w = duration_width(c, groups, num_font, label_font, gap, label_gap)
-        if total_w <= 124:
-            break
-
-    x = cx - total_w // 2
-    label_y = y + (num_h - label_h)
-
-    for i in range(len(groups)):
-        num_text, letter = groups[i]
-        draw_outlined_text(c, num_text, x, y, num_font, color, align = "left")
-        x += c.text_width(num_text, font = num_font)
-        x += label_gap
-        draw_outlined_text(c, letter, x, label_y, label_font, color, align = "left")
-        x += c.text_width(letter, font = label_font)
-        if i < len(groups) - 1:
-            x += gap
-
-
 def duration(c, ctx):
     if draw_moon_page(c, ctx, 3):
         return
@@ -3171,18 +3074,18 @@ def duration(c, ctx):
         verb = {"LAUNCH": "LAUNCH", "LAND": "LANDING", "MOONLAND": "MOON LANDING"}[kind]
         mission_line = display_name(name).upper() + " " + verb
         days_line = "IN " + str(n) + (" DAY" if n == 1 else " DAYS")
-        font = shared_font(c, [mission_line, days_line], ["6x8", "5x7", "4x5"], 124)
-        fitted1, _ = fit_text(c, mission_line, [font], 124)
-        fitted2, _ = fit_text(c, days_line, [font], 124)
+        font = shared_font(c, [mission_line, days_line], ["6x8", "5x7", "4x5"], 188)
+        fitted1, _ = fit_text(c, mission_line, [font], 188)
+        fitted2, _ = fit_text(c, days_line, [font], 188)
         h = 8 if font == "6x8" else (7 if font == "5x7" else 6)
         label_h = 6
         gap = 2
-        c.text("NEXT", 64, 1, font = "4x5", color = "#888888", align = "center")
+        c.text("NEXT", 96, 1, font = "4x5", color = "#888888", align = "center")
         top = label_h + gap
         y1 = top + (32 - top - (h + gap + h)) // 2
         y2 = y1 + h + gap
-        c.text(fitted1, 64, y1, font = font, color = "white", align = "center")
-        c.text(fitted2, 64, y2, font = font, color = "amber", align = "center")
+        c.text(fitted1, 96, y1, font = font, color = "white", align = "center")
+        c.text(fitted2, 96, y2, font = font, color = "amber", align = "center")
         return
 
     idx = rotation_index(ctx, len(events))
@@ -3209,7 +3112,7 @@ def duration(c, ctx):
             c.fill("#000000")
         legacy = ("FORCED A CM REDESIGN EVERY LATER APOLLO FLIGHT RELIED ON: A " +
                   "QUICK-RELEASE HATCH, SAFER CABIN AIR, AND LESS FLAMMABLE MATERIAL.")
-        draw_wrapped_fit_outlined(c, legacy, 2, 1, 124, "white", 31)
+        draw_wrapped_fit_outlined(c, legacy, 2, 1, 188, "white", 31)
         return
 
     draw_patch_background(c, name)
@@ -3217,8 +3120,8 @@ def duration(c, ctx):
     # Orbiter name between mission name and year (Shuttle only).
     orbiter = ORBITER.get(name)
     if orbiter != None:
-        draw_outlined_text(c, orbiter.upper(), 64, 1, "4x5", "white", align = "center")
-    draw_outlined_text(c, str(flight_year(mission, kind)), 126, 1, "4x5", "white", align = "right")
+        draw_outlined_text(c, orbiter.upper(), 96, 1, "4x5", "white", align = "center")
+    draw_outlined_text(c, str(flight_year(mission, kind)), 190, 1, "4x5", "white", align = "right")
 
     label = "LOST AFTER" if is_lost_today else ("IN SPACE" if in_flight else "DURATION")
     label_color = LOST_COLOR if is_lost_today else PATCH_LABEL_COLOR
@@ -3229,11 +3132,11 @@ def duration(c, ctx):
     label_y = HEADER_HEIGHT + 1
     if flight_num != None:
         draw_outlined_text(c, label.upper(), 2, label_y, "4x5", label_color, align = "left")
-        draw_outlined_text(c, ordinal(flight_num) + " FLIGHT", 126, label_y, "4x5", label_color, align = "right")
+        draw_outlined_text(c, ordinal(flight_num) + " FLIGHT", 190, label_y, "4x5", label_color, align = "right")
     else:
-        draw_outlined_text(c, label.upper(), 64, label_y, "4x5", label_color, align = "center")
+        draw_outlined_text(c, label.upper(), 96, label_y, "4x5", label_color, align = "center")
 
-    draw_duration(c, 64, HEADER_HEIGHT + 7, total_seconds, digit_color, num_font = "10x14", num_h = 14)
+    draw_duration(c, 96, HEADER_HEIGHT + 7, total_seconds, digit_color, num_font = "10x14", num_h = 14)
 
 
 # Crew who launched and landed on different missions, keyed by mission,
@@ -3483,85 +3386,12 @@ def roster_sort_key(mission_name, role, orig_idx):
     return (6, orig_idx)
 
 
-def draw_crew_member(c, y_top, block_h, full_name, role, tag):
-    fitted, font = fit_text(c, full_name.upper(), ["5x7", "4x5"], 124)
-    name_h = 7 if font == "5x7" else 6
-    role_h = 6
-    gap = 2
-    start_y = y_top + (block_h - (name_h + gap + role_h)) // 2
-    draw_outlined_text(c, fitted, 64, start_y, font, "white", align = "center")
-
-    role_y = start_y + name_h + gap
-    if role == "" and tag == "":
-        return
-    if role == "":
-        # No role on this mission: show the TO/FROM tag only.
-        draw_outlined_text(c, tag, 64, role_y, "4x5", STATION_TAG_COLOR, align = "center")
-        return
-    if tag == "":
-        draw_outlined_text(c, role, 64, role_y, "4x5", "amber", align = "center")
-        return
-
-    suffix = " - " + tag
-    total_w = c.text_width(role + suffix, font = "4x5")
-    start_x = 64 - total_w // 2
-    draw_outlined_text(c, role, start_x, role_y, "4x5", "amber", align = "left")
-    draw_outlined_text(c, suffix, start_x + c.text_width(role, font = "4x5"), role_y, "4x5", STATION_TAG_COLOR, align = "left")
-
-
-# Backup crew page. Mercury/Gemini use the stacked layout with a "BACKUP"
-# tag; Apollo's 3-person backup crews use compact rows tagged "BU".
-def draw_backup_crew(c, mission_name, backup_str):
-    if not draw_patch_background(c, mission_name):
-        c.fill("#000000")
-    names = parse_crew(backup_str)
-    n = len(names)
-    block_h = 32 // n
-    for i in range(n):
-        role = crew_role(mission_name, names, i)
-        if n <= 2:
-            draw_crew_member(c, i * block_h, block_h, names[i], role, "BACKUP")
-        else:
-            y = i * block_h + (block_h - 6) // 2
-            draw_crew_row(c, y, names[i], role, "BU")
-
-
 # "MILLIE HUGHES-FULFORD" -> "M. HUGHES-FULFORD".
 def abbreviate_first_name(name):
     parts = name.split(" ", 1)
     if len(parts) < 2 or parts[0] == "":
         return name
     return parts[0][0] + ". " + parts[1]
-
-
-# One compact roster line: name left, role/tag right. Shortens the first
-# name before truncating.
-def draw_crew_row(c, y, name, role, tag):
-    display_name = name.upper()
-
-    connector = " - " if role != "" and tag != "" else ""
-    right_text = role + connector + tag
-    right_w = c.text_width(right_text, font = "4x5") if right_text != "" else 0
-    gap = 4
-    budget = (124 - right_w - gap) if right_text != "" else 124
-
-    if c.text_width(display_name, font = "4x5") > budget:
-        abbreviated = abbreviate_first_name(display_name)
-        if c.text_width(abbreviated, font = "4x5") <= budget:
-            display_name = abbreviated
-        else:
-            display_name, _ = fit_text(c, abbreviated, ["4x5"], budget)
-
-    draw_outlined_text(c, display_name, 2, y, "4x5", "white", align = "left")
-
-    if right_text != "":
-        x = 126 - right_w
-        if role != "":
-            draw_outlined_text(c, role, x, y, "4x5", "amber", align = "left")
-            x += c.text_width(role, font = "4x5")
-        if tag != "":
-            piece = connector + tag if role != "" else tag
-            draw_outlined_text(c, piece, x, y, "4x5", STATION_TAG_COLOR, align = "left")
 
 
 # All 3 Apollo/Skylab/ASTP crew on one page, sorted by role.
@@ -3619,8 +3449,8 @@ def draw_crew_page(c, ctx, page_index):
 
     if len(events) == 0:
         c.fill("#000000")
-        c.text("NO US LAUNCHES OR".upper(), 64, 8, font = "4x5", color = "#888888", align = "center")
-        c.text("LANDINGS ON THIS DATE".upper(), 64, 18, font = "4x5", color = "#888888", align = "center")
+        c.text("NO US LAUNCHES OR".upper(), 96, 8, font = "4x5", color = "#888888", align = "center")
+        c.text("LANDINGS ON THIS DATE".upper(), 96, 18, font = "4x5", color = "#888888", align = "center")
         return
 
     idx = rotation_index(ctx, len(events))
@@ -3676,8 +3506,8 @@ def draw_shuttle_crew_page(c, ctx, page_index):
 
     if len(events) == 0:
         c.fill("#000000")
-        c.text("NO US LAUNCHES OR".upper(), 64, 8, font = "4x5", color = "#888888", align = "center")
-        c.text("LANDINGS ON THIS DATE".upper(), 64, 18, font = "4x5", color = "#888888", align = "center")
+        c.text("NO US LAUNCHES OR".upper(), 96, 8, font = "4x5", color = "#888888", align = "center")
+        c.text("LANDINGS ON THIS DATE".upper(), 96, 18, font = "4x5", color = "#888888", align = "center")
         return False
 
     idx = rotation_index(ctx, len(events))
@@ -3743,16 +3573,9 @@ def current_flight_event(ctx):
 
 # Fixed 5x7 font and positions so every mission's page lines up.
 def draw_module_block(c, label_y, name_y, label, name):
-    fitted, _ = fit_text(c, name.upper(), ["5x7"], 124)
-    draw_outlined_text(c, label, 64, label_y, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_outlined_text(c, fitted, 64, name_y, "5x7", "white", align = "center")
-
-
-def draw_module_names(c, mission_name, cm_name, lm_name):
-    if not draw_patch_background(c, mission_name):
-        c.fill("#000000")
-    draw_module_block(c, 2, 9, "COMMAND MODULE", cm_name)
-    draw_module_block(c, 17, 24, "LUNAR MODULE", lm_name)
+    fitted, _ = fit_text(c, name.upper(), ["5x7"], 188)
+    draw_outlined_text(c, label, 96, label_y, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_outlined_text(c, fitted, 96, name_y, "5x7", "white", align = "center")
 
 
 # Prime recovery ship per splashdown mission.
@@ -3813,12 +3636,12 @@ RECOVERY_SHIP = {
 
 # Small label over a larger value, centered in a block.
 def draw_fact_block(c, y_top, block_h, label, value, gap = 3, color = "white"):
-    fitted, font = fit_text(c, value.upper(), ["6x8", "5x7", "4x5"], 124)
+    fitted, font = fit_text(c, value.upper(), ["6x8", "5x7", "4x5"], 188)
     value_h = 8 if font == "6x8" else (7 if font == "5x7" else 6)
     label_h = 6
     start_y = y_top + (block_h - (label_h + gap + value_h)) // 2
-    draw_outlined_text(c, label, 64, start_y, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_outlined_text(c, fitted, 64, start_y + label_h + gap, font, color, align = "center")
+    draw_outlined_text(c, label, 96, start_y, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_outlined_text(c, fitted, 96, start_y + label_h + gap, font, color, align = "center")
 
 
 def draw_fact(c, name, label, value):
@@ -3842,8 +3665,8 @@ def draw_iss_expedition(c, name, kind):
         # MS-10: abort declared 121.57 s after liftoff.
         if not draw_patch_background(c, name):
             c.fill("#000000")
-        draw_outlined_text(c, "ABORTED AFTER LIFTOFF", 64, 5, "4x5", PATCH_LABEL_COLOR, align = "center")
-        draw_duration(c, 64, 13, 122, "amber", num_font = "10x14", num_h = 14)
+        draw_outlined_text(c, "ABORTED AFTER LIFTOFF", 96, 5, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_duration(c, 96, 13, 186, "amber", num_font = "10x14", num_h = 14)
         return True
     exp = ISS_EXPEDITION.get(name)
     if exp == None:
@@ -3863,7 +3686,7 @@ def draw_iss_expedition(c, name, kind):
     if not draw_patch_background(c, name):
         c.fill("#000000")
     label = "MIR EXPEDITION" if name == "SOYUZ TM-21" else "EXPEDITION"
-    draw_outlined_text(c, label, 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_outlined_text(c, label, 96, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
     # "10x14" has no "/" or "-": draw numbers big and the separator small.
     sep = "/" if "/" in value else "-"
     parts = value.split(sep) if sep in value else [value]
@@ -3874,14 +3697,14 @@ def draw_iss_expedition(c, name, kind):
         total_w += c.text_width(parts[i], font = "10x14")
         if i < len(parts) - 1:
             total_w += sep_w + 2 * gap
-    x = 64 - total_w // 2
+    x = 96 - total_w // 2
     for i in range(len(parts)):
         draw_outlined_text(c, parts[i], x, 9, "10x14", "white", align = "left")
         x += c.text_width(parts[i], font = "10x14")
         if i < len(parts) - 1:
             draw_outlined_text(c, sep, x + gap, 12, "5x7", "#cccccc", align = "left")
             x += sep_w + 2 * gap
-    draw_outlined_text(c, tag, 64, 26, "4x5", "amber", align = "center")
+    draw_outlined_text(c, tag, 96, 26, "4x5", "amber", align = "center")
     return True
 
 
@@ -3910,45 +3733,9 @@ def draw_iss_dock(c, name, kind):
         return False
     if not draw_patch_background(c, name):
         c.fill("#000000")
-    draw_outlined_text(c, label, 64, 5, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_duration(c, 64, 13, dock_seconds(value), "amber", num_font = "10x14", num_h = 14)
+    draw_outlined_text(c, label, 96, 5, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_duration(c, 96, 13, dock_seconds(value), "amber", num_font = "10x14", num_h = 14)
     return True
-
-
-# Launch vehicle and recovery ship on one page, at fixed rows.
-def draw_two_facts(c, name, vehicle, ship):
-    if not draw_patch_background(c, name):
-        c.fill("#000000")
-    draw_outlined_text(c, "LAUNCH VEHICLE", 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_outlined_text(c, vehicle.upper(), 64, 9, "5x7", "white", align = "center")
-
-    draw_outlined_text(c, "RECOVERY SHIP", 64, 17, "4x5", PATCH_LABEL_COLOR, align = "center")
-    fitted, _ = fit_text(c, ship.upper(), ["4x5"], 124)
-    draw_outlined_text(c, fitted, 64, 24, "4x5", "white", align = "center")
-
-
-# Page 6 for private flights: two label/value rows.
-def draw_label_pairs(c, name, label1, value1, label2, value2):
-    if not draw_patch_background(c, name):
-        c.fill("#000000")
-    draw_outlined_text(c, label1, 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
-    fitted, font = fit_text(c, value1, ["5x7", "4x5"], 124)
-    draw_outlined_text(c, fitted, 64, 9, font, "white", align = "center")
-    draw_outlined_text(c, label2, 64, 17, "4x5", PATCH_LABEL_COLOR, align = "center")
-    fitted, font = fit_text(c, value2, ["5x7", "4x5"], 124)
-    draw_outlined_text(c, fitted, 64, 24, font, "white", align = "center")
-
-
-# Page 6 for STS-1 to STS-4: the shared OFT fact.
-def draw_oft_facts(c, name):
-    if not draw_patch_background(c, name):
-        c.fill("#000000")
-    draw_outlined_text(c, "MISSION TYPE", 64, 2, "4x5", PATCH_LABEL_COLOR, align = "center")
-    fitted, font = fit_text(c, "ORBITAL FLIGHT TEST", ["5x7", "4x5"], 124)
-    draw_outlined_text(c, fitted, 64, 9, font, "white", align = "center")
-
-    draw_outlined_text(c, "CREW ESCAPE", 64, 17, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_outlined_text(c, "EJECTION SEATS", 64, 24, "5x7", "white", align = "center")
 
 
 # Launch vehicle and/or recovery ship; False if neither is on record.
@@ -3967,16 +3754,6 @@ def draw_vehicle_ship(c, name):
     return False
 
 
-# Two label/value pairs side by side, fixed 5x7.
-def draw_two_facts_lr(c, name, label1, value1, label2, value2):
-    if not draw_patch_background(c, name):
-        c.fill("#000000")
-    draw_outlined_text(c, label1, 32, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_big_value(c, 32, 12, value1)
-    draw_outlined_text(c, label2, 96, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
-    draw_big_value(c, 96, 12, value2)
-
-
 def draw_big_value(c, cx, y, value):
     parts = value.split(" ")
     num = parts[0]
@@ -3986,7 +3763,7 @@ def draw_big_value(c, cx, y, value):
     total = nw + (2 + uw if unit != "" else 0)
     if total > 60:
         w = c.text_width(value, font = "6x8")
-        x = min(max(cx - w // 2, 1), 126 - w)
+        x = min(max(cx - w // 2, 1), 190 - w)
         draw_outlined_text(c, value, x, y + 4, "6x8", "white", align = "left")
         return
     x = cx - total // 2
@@ -4309,8 +4086,8 @@ SHUTTLE_ORBITS = {
     "STS-106": "185",
     "STS-92": "202",
     "STS-97": "171",
-    "STS-98": "171",
-    "STS-102": "102",
+    "STS-98": "203",
+    "STS-102": "202",
     "STS-100": "186",
     "STS-104": "200",
     "STS-105": "186",
@@ -4911,7 +4688,7 @@ MEMORIAL_QUOTE = {
 def draw_quote_page(c, name, text):
     if not draw_patch_background(c, name):
         c.fill("#000000")
-    draw_wrapped_fit_outlined(c, text, 2, 1, 124, "white", 31)
+    draw_wrapped_fit_outlined(c, text, 2, 1, 188, "white", 31)
 
 
 def crew(c, ctx):
@@ -4927,18 +4704,18 @@ def crew(c, ctx):
         verb = {"LAUNCH": "LAUNCH", "LAND": "LANDING", "MOONLAND": "MOON LANDING"}[kind]
         mission_line = display_name(name).upper() + " " + verb
         days_line = str(n) + (" DAY" if n == 1 else " DAYS") + " AGO"
-        font = shared_font(c, [mission_line, days_line], ["6x8", "5x7", "4x5"], 124)
-        fitted1, _ = fit_text(c, mission_line, [font], 124)
-        fitted2, _ = fit_text(c, days_line, [font], 124)
+        font = shared_font(c, [mission_line, days_line], ["6x8", "5x7", "4x5"], 188)
+        fitted1, _ = fit_text(c, mission_line, [font], 188)
+        fitted2, _ = fit_text(c, days_line, [font], 188)
         h = 8 if font == "6x8" else (7 if font == "5x7" else 6)
         label_h = 6
         gap = 2
-        c.text("LAST", 64, 1, font = "4x5", color = "#888888", align = "center")
+        c.text("LAST", 96, 1, font = "4x5", color = "#888888", align = "center")
         top = label_h + gap
         y1 = top + (32 - top - (h + gap + h)) // 2
         y2 = y1 + h + gap
-        c.text(fitted1, 64, y1, font = font, color = "white", align = "center")
-        c.text(fitted2, 64, y2, font = font, color = "amber", align = "center")
+        c.text(fitted1, 96, y1, font = font, color = "white", align = "center")
+        c.text(fitted2, 96, y2, font = font, color = "amber", align = "center")
         return
 
     mission, kind = event
@@ -6143,50 +5920,6 @@ ASTRONAUT_DATES = {
 MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 
-# STATUS page: status plus dates.
-def draw_astronaut_status(c, name):
-    _, _, status = ASTRONAUT_PROFILES[name]
-    corps, nasa, died = ASTRONAUT_DATES.get(name, ("", "", ""))
-    c.fill("#000000")
-
-    if status == "ACTIVE":
-        c.text("STATUS", 64, 1, font = "4x5", color = "#888888", align = "center")
-        c.text("ACTIVE", 64, 14, font = "6x8", color = "#3ee08f", align = "center")
-        return
-
-    # Died in service: one big word plus the date.
-    if status == "DECEASED":
-        c.text("STATUS", 64, 1, font = "4x5", color = "#888888", align = "center")
-        c.text("DECEASED", 64, 10, font = "6x8", color = "#c3c6ca", align = "center")
-        if died != "":
-            c.text(format_status_date(died), 64, 22, font = "5x7", color = "white", align = "center")
-        return
-
-    # Up to three rows: left the corps, left NASA, died.
-    rows = []
-    if status == "DISMISSED":
-        rows.append(("DISMISSED", corps, "#ffbe4d"))
-    elif nasa != "" and nasa == corps:
-        # Left the corps and NASA the same day: one RETIRED row.
-        rows.append(("RETIRED", corps, "#5aaeff"))
-    else:
-        rows.append(("LEFT CORPS", corps, "#5aaeff"))
-        if nasa != "":
-            rows.append(("LEFT NASA", nasa, "#b4d4ff"))
-    if "DECEASED" in status:
-        rows.append(("DIED", died, "#c3c6ca"))
-    # Three rows fill the panel, so the STATUS label shows only with 1-2.
-    if len(rows) < 3:
-        c.text("STATUS", 64, 1, font = "4x5", color = "#888888", align = "center")
-    top = 2 if len(rows) == 3 else (10 if len(rows) == 2 else 14)
-    step = 11 if len(rows) == 3 else 10
-    for i in range(len(rows)):
-        label, date, color = rows[i]
-        y = top + i * step
-        c.text(label, 3, y, font = "5x7", color = color, align = "left")
-        c.text(format_status_date(date) if date != "" else "UNKNOWN", 125, y, font = "5x7", color = "white" if date != "" else "#888888", align = "right")
-
-
 # "1991-08-01" -> "8/1/1991", "1991-08" -> "8/1991", "1991" -> "1991".
 def format_status_date(d):
     parts = d.split("-")
@@ -6333,20 +6066,20 @@ def details1(c, ctx):
         group_num, group, status = ASTRONAUT_PROFILES[name]
         accent = GROUP_COLORS[group_num]
         c.fill("#000000")
-        c.text("ASTRONAUT PROFILE:", 64, 1, font = "4x5", color = "#888888", align = "center")
-        fitted, font = fit_text(c, name.upper(), ["6x8", "5x7", "4x5", "3x7"], 124)
-        draw_text_apostrophes(c, fitted, 64, 8, font, "white")
+        c.text("ASTRONAUT PROFILE:", 96, 1, font = "4x5", color = "#888888", align = "center")
+        fitted, font = fit_text(c, name.upper(), ["6x8", "5x7", "4x5", "3x7"], 188)
+        draw_text_apostrophes(c, fitted, 96, 8, font, "white")
         # Selection year set into the divider.
         sel = "SELECTED " + str(GROUP_YEARS[group_num])
         sw = c.text_width(sel, font = "4x5")
-        c.line(8, 20, 64 - sw // 2 - 4, 20, accent)
-        c.line(64 + sw // 2 + 4, 20, 119, 20, accent)
-        c.text(sel, 64, 18, font = "4x5", color = "#888888", align = "center")
+        c.line(8, 20, 96 - sw // 2 - 4, 20, accent)
+        c.line(96 + sw // 2 + 4, 20, 183, 20, accent)
+        c.text(sel, 96, 18, font = "4x5", color = "#888888", align = "center")
         # 4x5 first; the longest nicknames fall back to 3x7.
-        gfitted, gfont = fit_text(c, group, ["4x5", "3x7", "3x4"], 124)
+        gfitted, gfont = fit_text(c, group, ["4x5", "3x7", "3x4"], 188)
         # Anchored to the bottom by the chosen font's height.
         gh = 7 if gfont == "3x7" else (4 if gfont == "3x4" else 5)
-        c.text(gfitted, 64, 31 - gh, font = gfont, color = accent, align = "center")
+        c.text(gfitted, 96, 31 - gh, font = gfont, color = accent, align = "center")
         return
     if event != None:
         mission, kind = event
@@ -6397,25 +6130,26 @@ def details2(c, ctx):
         accent = GROUP_COLORS[group_num]
         missions = astronaut_missions(name)
         c.fill("#000000")
-        c.text("MISSIONS (" + str(len(missions)) + ")", 64, 1, font = "4x5", color = accent, align = "center")
+        c.text("MISSIONS (" + str(len(missions)) + ")", 96, 1, font = "4x5", color = accent, align = "center")
         if len(missions) == 0:
             # Died before their first flight.
-            c.text("NEVER FLEW", 64, 15, font = "6x8", color = "white", align = "center")
+            c.text("NEVER FLEW", 96, 15, font = "6x8", color = "white", align = "center")
         else:
             # Biggest font that fits, centered below the label; wraps on whole names.
             names = [display_name(m).upper() for m in missions]
             area_top = 8
-            area_h = 32 - area_top
+            area_h = 26 - area_top
             font, h = PROFILE_MISSION_LADDER[len(PROFILE_MISSION_LADDER) - 1]
-            lines = mission_lines(c, names, font, 124)
+            lines = mission_lines(c, names, font, 188)
             for f, fh in PROFILE_MISSION_LADDER:
-                ls = mission_lines(c, names, f, 124)
+                ls = mission_lines(c, names, f, 188)
                 if len(ls) * fh <= area_h:
                     font, h, lines = f, fh, ls
                     break
             y = area_top + (area_h - len(lines) * h) // 2
             for k in range(len(lines)):
-                c.text(lines[k], 64, y + k * h, font = font, color = "white", align = "center")
+                c.text(lines[k], 96, y + k * h, font = font, color = "white", align = "center")
+            draw_flight_timeline(c, missions, accent)
         return
     if event != None:
         mission, kind = event
@@ -6533,34 +6267,6 @@ def trip_seconds(mission, who):
     return land_abs - launch_abs
 
 
-# Days and hours, right-aligned: amber digits, 5x7 unit letters.
-def draw_dh_right(c, right_x, y, secs):
-    parts = [(str(secs // 86400), "D"), (str((secs % 86400) // 3600), "H")]
-    w = duration_width(c, parts, "6x8", "5x7", 3, 1)
-    x = right_x - w
-    for i in range(len(parts)):
-        num, letter = parts[i]
-        draw_outlined_text(c, num, x, y, "6x8", "amber", align = "left")
-        x += c.text_width(num, font = "6x8") + 1
-        draw_outlined_text(c, letter, x, y + 1, "5x7", "amber", align = "left")
-        x += c.text_width(letter, font = "5x7") + 3
-
-
-def draw_land_flight_times(c, mission):
-    if not draw_patch_background(c, mission[0]):
-        c.fill("#000000")
-    people = [r[0] for r in build_applicable_roster(mission, "LAND") if r[0] in ASTRONAUT_PROFILES]
-    draw_outlined_text(c, "TIME IN SPACE", 64, 1, "4x5", PATCH_LABEL_COLOR, align = "center")
-    if len(people) == 1:
-        draw_outlined_text(c, people[0].upper(), 64, 10, "5x7", "white", align = "center")
-        draw_duration(c, 64, 21, trip_seconds(mission, people[0]), "amber")
-        return
-    for i in range(len(people)):
-        y = 10 + i * 11
-        draw_outlined_text(c, people[i].split(" ")[-1].upper(), 3, y, "6x8", "white", align = "left")
-        draw_dh_right(c, 125, y, trip_seconds(mission, people[i]))
-
-
 def details4(c, ctx):
     if draw_moon_page(c, ctx, 8):
         return
@@ -6572,11 +6278,11 @@ def details4(c, ctx):
         group_num, _, _ = ASTRONAUT_PROFILES[name]
         total = astronaut_total_seconds(name, ctx.now.unix)
         c.fill("#000000")
-        c.text("FLIGHT TIME", 64, 2, font = "4x5", color = GROUP_COLORS[group_num], align = "center")
+        c.text("FLIGHT TIME", 96, 2, font = "4x5", color = GROUP_COLORS[group_num], align = "center")
         if len(astronaut_missions(name)) == 0:
-            c.text("NEVER FLEW", 64, 15, font = "6x8", color = "#c3c6ca", align = "center")
+            c.text("NEVER FLEW", 96, 15, font = "6x8", color = "#c3c6ca", align = "center")
         else:
-            draw_duration(c, 64, 10, total, "amber", num_font = "10x14", num_h = 14)
+            draw_duration(c, 96, 10, total, "amber", num_font = "10x14", num_h = 14)
         return
     if event != None:
         mission, kind = event
@@ -6621,11 +6327,688 @@ def details4(c, ctx):
 def title(c, ctx):
     c.fill("#000000")
     for y in range(1, 32, 3):
-        c.line(0, y, 127, y, "#003300")
-    c.rect(0, 0, 127, 0, fill = "#33ff33")
-    c.rect(0, 31, 127, 31, fill = "#33ff33")
+        c.line(0, y, 191, y, "#003300")
+    c.rect(0, 0, 191, 0, fill = "#33ff33")
+    c.rect(0, 31, 191, 31, fill = "#33ff33")
     c.rect(0, 0, 0, 31, fill = "#33ff33")
-    c.rect(127, 0, 127, 31, fill = "#33ff33")
-    c.text("TODAY IN", 64, 4, font = "6x8", color = "#33ff33", align = "center")
-    c.text("US MANNED", 64, 13, font = "6x8", color = "#33ff33", align = "center")
-    c.text("SPACE FLIGHT", 64, 22, font = "6x8", color = "#33ff33", align = "center")
+    c.rect(191, 0, 191, 31, fill = "#33ff33")
+    c.text("TODAY IN", 96, 4, font = "6x8", color = "#33ff33", align = "center")
+    c.text("US MANNED", 96, 13, font = "6x8", color = "#33ff33", align = "center")
+    c.text("SPACE FLIGHT", 96, 22, font = "6x8", color = "#33ff33", align = "center")
+
+
+# ------------------------------------------------- 192-wide overrides ----
+
+# The wider regular 5x5 face (same 5px capitals as 4x5) goes ahead of 4x5
+# whenever the text only uses characters it can draw.
+WIDE_OK = " $%+-.:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+def wide_ok(text):
+    for i in range(len(text)):
+        if WIDE_OK.find(text[i]) < 0:
+            return False
+    return True
+
+def fit_text(c, text, fonts, maxw):
+    if maxw < 4:
+        return "", fonts[len(fonts) - 1]
+    if "4x5" in fonts and "5x5" not in fonts and wide_ok(text):
+        k = fonts.index("4x5")
+        fonts = fonts[:k] + ["5x5"] + fonts[k:]
+    for i in range(len(fonts)):
+        f = fonts[i]
+        if c.text_width(text, font = f) <= maxw:
+            return text, f
+    f = fonts[len(fonts) - 1]
+    for i in range(len(text), 0, -1):
+        t = text[:i] + ".."
+        if c.text_width(t, font = f) <= maxw:
+            return t, f
+    return "", f
+
+# "#rrggbb" scaled to pct percent brightness.
+def dim_hex(col, pct):
+    r = int(col[1:3], 16) * pct // 100
+    g = int(col[3:5], 16) * pct // 100
+    b = int(col[5:7], 16) * pct // 100
+    digits = "0123456789abcdef"
+    out = "#"
+    for v in [r, g, b]:
+        out += digits[v // 16] + digits[v % 16]
+    return out
+
+# Patch art: the stored 128-wide art centered, each band's edge color carried
+# out to the panel edges at 45% so the patch itself stays the focus.
+def draw_patch_background(c, name):
+    data = PATCH_BG_ROWS.get(name)
+    if data == None:
+        return False
+    x = 0
+    y = 0
+    for i in range(len(data) // 8):
+        j = i * 8
+        run = int(data[j:j + 2], 16) + 1
+        col = "#" + data[j + 2:j + 8]
+        if x == 0:
+            c.rect(0, y, 31, y + PATCH_BAND_H - 1, fill = dim_hex(col, 45))
+        if x + run >= 128:
+            c.rect(160, y, 191, y + PATCH_BAND_H - 1, fill = dim_hex(col, 45))
+        c.rect(32 + x, y, 32 + x + run - 1, y + PATCH_BAND_H - 1, fill = col)
+        x += run
+        if x >= 128:
+            x = 0
+            y += PATCH_BAND_H
+    return True
+
+# Crew role codes spelled out (the codes still drive sorting everywhere else).
+ROLE_NAMES = {
+    "CDR": "COMMANDER", "PLT": "PILOT", "CP": "COMMAND PILOT", "SP": "SENIOR PILOT",
+    "CMP": "COMMAND MODULE PILOT", "LMP": "LUNAR MODULE PILOT", "SPT": "SCIENCE PILOT",
+    "DMP": "DOCKING MODULE PILOT", "MS": "MISSION SPECIALIST", "MS1": "MISSION SPECIALIST 1",
+    "MS2": "MISSION SPECIALIST 2", "MS3": "MISSION SPECIALIST 3", "MS4": "MISSION SPECIALIST 4",
+    "MS5": "MISSION SPECIALIST 5", "PS": "PAYLOAD SPECIALIST", "PS1": "PAYLOAD SPECIALIST 1",
+    "PS2": "PAYLOAD SPECIALIST 2", "PS3": "PAYLOAD SPECIALIST 3", "PC": "PAYLOAD COMMANDER",
+    "MSE": "SPACEFLIGHT ENGINEER", "FE": "FLIGHT ENGINEER", "RC": "RESEARCH COSMONAUT",
+    "JOC": "JOINT OPERATIONS COMMANDER", "MO": "MEDICAL OFFICER",
+}
+TAG_NAMES = {"BU": "BACKUP"}
+
+# Width of a role/tag pair as drawn ("ROLE - TAG").
+def role_tag_width(c, role, tag):
+    t = role + (" - " if role != "" and tag != "" else "") + tag
+    return c.text_width(t, font = "4x5") if t != "" else 0
+
+# flights they launched on, e.g. a ride home).
+def flight_label(person, mission_name):
+    if mission_name == "":
+        return ""
+    ms = astronaut_missions(person)
+    for k in range(len(ms)):
+        if ms[k] == mission_name:
+            return "1ST FLIGHT" if k == 0 else ordinal(k + 1) + " FLIGHT"
+    return ""
+
+# Compact crew row (three to a page): name left, role spelled out on the
+# right. The name drops to the narrower face before the role falls back to
+# its short code.
+def draw_crew_row(c, y, name, role, tag):
+    display_name = name.upper()
+    full_role = ROLE_NAMES.get(role, role)
+    full_tag = TAG_NAMES.get(tag, tag)
+    fonts = ["5x5", "4x5"] if wide_ok(display_name) else ["4x5"]
+    choice = None
+    for r, t in [(full_role, full_tag), (role, full_tag), (role, tag)]:
+        for nf in fonts:
+            if c.text_width(display_name, font = nf) + 6 + role_tag_width(c, r, t) <= 188:
+                choice = (r, t, nf)
+                break
+        if choice != None:
+            break
+    if choice == None:
+        nf = "4x5"
+        budget = 188 - role_tag_width(c, role, tag) - 4
+        abbreviated = abbreviate_first_name(display_name)
+        if c.text_width(abbreviated, font = "4x5") <= budget:
+            display_name = abbreviated
+        else:
+            display_name, _ = fit_text(c, abbreviated, ["4x5"], budget)
+        choice = (role, tag, nf)
+    r, t, nf = choice
+    draw_outlined_text(c, display_name, 2, y, nf, "white", align = "left")
+    x = 190 - role_tag_width(c, r, t)
+    if r != "":
+        draw_outlined_text(c, r, x, y, "4x5", "amber", align = "left")
+        x += c.text_width(r, font = "4x5")
+    if t != "":
+        piece = (" - " + t) if r != "" else t
+        draw_outlined_text(c, piece, x, y, "4x5", STATION_TAG_COLOR, align = "left")
+
+# Backup crew page. Two or fewer: stacked, tagged BACKUP. Three: a BACKUP
+# CREW title and untagged rows, so every role can be spelled out.
+def draw_backup_crew(c, mission_name, backup_str):
+    if not draw_patch_background(c, mission_name):
+        c.fill("#000000")
+    names = parse_crew(backup_str)
+    n = len(names)
+    if n <= 2:
+        block_h = 32 // n
+        for i in range(n):
+            draw_crew_member(c, i * block_h, block_h, names[i], crew_role(mission_name, names, i), "BACKUP")
+        return
+    draw_outlined_text(c, "BACKUP CREW", 96, 1, "4x5", STATION_TAG_COLOR, align = "center")
+    for i in range(n):
+        draw_crew_row(c, 9 + i * 8, names[i], crew_role(mission_name, names, i), "")
+
+# Stacked crew member: big name, then the role (+ tag) spelled out.
+def draw_crew_member(c, y_top, block_h, full_name, role, tag):
+    fitted, font = fit_text(c, full_name.upper(), ["5x7", "4x5"], 188)
+    name_h = 7 if font == "5x7" else 6
+    role_h = 6
+    gap = 2
+    start_y = y_top + (block_h - (name_h + gap + role_h)) // 2
+    draw_outlined_text(c, fitted, 96, start_y, font, "white", align = "center")
+    role_y = start_y + name_h + gap
+    pieces = []
+    for r, t in [(ROLE_NAMES.get(role, role), TAG_NAMES.get(tag, tag)), (role, tag)]:
+        pieces = []
+        if r != "":
+            pieces.append((r, "amber"))
+        if t != "":
+            pieces.append(((" - " if r != "" else "") + t, STATION_TAG_COLOR))
+        w = 0
+        for piece_text, _ in pieces:
+            w += c.text_width(piece_text, font = "4x5")
+        if w <= 188:
+            break
+    if len(pieces) == 0:
+        return
+    total_w = 0
+    for t, _ in pieces:
+        total_w += c.text_width(t, font = "4x5")
+    x = 96 - total_w // 2
+    for t, col in pieces:
+        draw_outlined_text(c, t, x, role_y, "4x5", col, align = "left")
+        x += c.text_width(t, font = "4x5")
+
+# A moonwalker's full name from the mission's crew list ("ALDRIN" -> "BUZZ ALDRIN").
+def moonwalker_name(mission, surname):
+    for p in parse_crew(mission[7]):
+        parts = p.upper().split(" ")
+        if parts[len(parts) - 1] == surname:
+            return p.upper()
+    return surname
+
+# Career strip under the mission list: 1959-2026, one mark per flight year.
+def draw_flight_timeline(c, missions, accent):
+    y = 28
+    x0 = 22
+    x1 = 169
+    c.text("1959", 1, y - 1, font = "picopixel", color = "#6a6f78", align = "left")
+    c.text("2026", 190, y - 1, font = "picopixel", color = "#6a6f78", align = "right")
+    c.rect(x0, y + 1, x1, y + 1, fill = "#2a2e36")
+    years = {}
+    for m in ALL_MISSIONS:
+        if m[0] in missions:
+            years[m[1]] = 1
+    for yr in years:
+        x = x0 + (yr - 1959) * (x1 - x0) // (2026 - 1959)
+        c.rect(x - 1, y, x + 1, y + 2, fill = accent)
+
+# STATUS page: each label/date pair sits together in the middle.
+def draw_astronaut_status(c, name):
+    _, _, status = ASTRONAUT_PROFILES[name]
+    corps, nasa, died = ASTRONAUT_DATES.get(name, ("", "", ""))
+    c.fill("#000000")
+    if status == "ACTIVE":
+        c.text("STATUS", 96, 1, font = "4x5", color = "#888888", align = "center")
+        c.text("ACTIVE", 96, 14, font = "6x8", color = "#3ee08f", align = "center")
+        return
+    if status == "DECEASED":
+        c.text("STATUS", 96, 1, font = "4x5", color = "#888888", align = "center")
+        c.text("DECEASED", 96, 10, font = "6x8", color = "#c3c6ca", align = "center")
+        if died != "":
+            c.text(format_status_date(died), 96, 22, font = "5x7", color = "white", align = "center")
+        return
+    rows = []
+    if status == "DISMISSED":
+        rows.append(("DISMISSED", corps, "#ffbe4d"))
+    elif nasa != "" and nasa == corps:
+        rows.append(("RETIRED", corps, "#5aaeff"))
+    else:
+        rows.append(("LEFT CORPS", corps, "#5aaeff"))
+        if nasa != "":
+            rows.append(("LEFT NASA", nasa, "#b4d4ff"))
+    if "DECEASED" in status:
+        rows.append(("DIED", died, "#c3c6ca"))
+    if len(rows) < 3:
+        c.text("STATUS", 96, 1, font = "4x5", color = "#888888", align = "center")
+    top = 2 if len(rows) == 3 else (10 if len(rows) == 2 else 14)
+    step = 11 if len(rows) == 3 else 10
+    for i in range(len(rows)):
+        label, date, color = rows[i]
+        y = top + i * step
+        c.text(label, 92, y, font = "5x7", color = color, align = "right")
+        c.text(format_status_date(date) if date != "" else "UNKNOWN", 100, y, font = "5x7", color = "white" if date != "" else "#888888", align = "left")
+
+
+# ------------------------------------------ orbit inclination (192) ----
+
+# Orbital inclination in degrees, from each mission's Wikipedia infobox.
+# Missions without one (suborbital hops, etc.) keep the two-number page.
+INCLINATION = {
+    "APOLLO 7": "31.6",
+    "APOLLO 8": "32.1",
+    "APOLLO-SOYUZ": "51.8",
+    "ARTEMIS II": "28.5",
+    "AURORA 7": "32.5",
+    "FAITH 7": "32.5",
+    "FRIENDSHIP 7": "32.5",
+    "GEMINI 10": "28.8",
+    "GEMINI 11": "28.8",
+    "GEMINI 12": "28.8",
+    "GEMINI 3": "32.6",
+    "GEMINI 4": "32.5",
+    "GEMINI 5": "32.5",
+    "GEMINI 6": "28.9",
+    "GEMINI 7": "28.9",
+    "GEMINI 8": "28.9",
+    "GEMINI 9A": "28.8",
+    "SIGMA 7": "32.5",
+    "SKYLAB 2": "50.0",
+    "SKYLAB 3": "50.0",
+    "SKYLAB 4": "50.0",
+    "STS-1": "40.3",
+    "STS-100": "51.5",
+    "STS-101": "51.5",
+    "STS-102": "51.5",
+    "STS-103": "28.4",
+    "STS-104": "51.6",
+    "STS-105": "51.6",
+    "STS-106": "51.6",
+    "STS-107": "39.0",
+    "STS-108": "51.6",
+    "STS-109": "28.5",
+    "STS-110": "51.6",
+    "STS-111": "51.6",
+    "STS-112": "51.6",
+    "STS-113": "51.6",
+    "STS-114": "51.6",
+    "STS-115": "51.6",
+    "STS-116": "51.6",
+    "STS-117": "51.6",
+    "STS-118": "51.6",
+    "STS-119": "51.6",
+    "STS-120": "51.6",
+    "STS-121": "51.6",
+    "STS-122": "51.6",
+    "STS-123": "51.6",
+    "STS-124": "51.6",
+    "STS-125": "28.5",
+    "STS-126": "51.6",
+    "STS-127": "51.6",
+    "STS-128": "51.6",
+    "STS-129": "51.6",
+    "STS-130": "51.6",
+    "STS-131": "51.6",
+    "STS-132": "51.6",
+    "STS-133": "51.6",
+    "STS-134": "51.6",
+    "STS-135": "51.6",
+    "STS-2": "38.0",
+    "STS-26": "28.4",
+    "STS-27": "57.0",
+    "STS-28": "57.0",
+    "STS-29": "28.4",
+    "STS-3": "38.0",
+    "STS-30": "28.4",
+    "STS-31": "28.4",
+    "STS-32": "28.4",
+    "STS-33": "28.4",
+    "STS-34": "34.3",
+    "STS-35": "28.5",
+    "STS-36": "62.0",
+    "STS-37": "28.4",
+    "STS-38": "28.4",
+    "STS-39": "57.0",
+    "STS-4": "28.5",
+    "STS-40": "39.0",
+    "STS-41": "28.4",
+    "STS-41-B": "28.5",
+    "STS-41-C": "28.5",
+    "STS-41-D": "28.5",
+    "STS-41-G": "57.0",
+    "STS-42": "57.0",
+    "STS-43": "28.5",
+    "STS-44": "28.4",
+    "STS-45": "57.0",
+    "STS-46": "28.5",
+    "STS-47": "57.0",
+    "STS-48": "57.0",
+    "STS-49": "28.3",
+    "STS-5": "28.5",
+    "STS-50": "28.5",
+    "STS-51": "28.4",
+    "STS-51-A": "28.4",
+    "STS-51-B": "57.0",
+    "STS-51-C": "28.4",
+    "STS-51-D": "28.4",
+    "STS-51-F": "49.5",
+    "STS-51-G": "28.4",
+    "STS-51-I": "28.4",
+    "STS-51-J": "28.5",
+    "STS-52": "28.4",
+    "STS-53": "57.0",
+    "STS-54": "28.4",
+    "STS-55": "28.4",
+    "STS-56": "57.0",
+    "STS-57": "28.4",
+    "STS-58": "39.0",
+    "STS-59": "57.0",
+    "STS-6": "28.5",
+    "STS-60": "56.4",
+    "STS-61": "28.4",
+    "STS-61-A": "57.0",
+    "STS-61-B": "28.4",
+    "STS-61-C": "28.4",
+    "STS-62": "39.0",
+    "STS-63": "51.6",
+    "STS-64": "56.9",
+    "STS-65": "28.4",
+    "STS-66": "57.0",
+    "STS-67": "28.4",
+    "STS-68": "57.0",
+    "STS-69": "28.4",
+    "STS-7": "28.3",
+    "STS-70": "28.4",
+    "STS-71": "51.6",
+    "STS-72": "28.4",
+    "STS-73": "39.0",
+    "STS-74": "51.6",
+    "STS-75": "28.4",
+    "STS-76": "51.6",
+    "STS-77": "39.0",
+    "STS-78": "39.0",
+    "STS-79": "51.6",
+    "STS-8": "28.5",
+    "STS-80": "28.4",
+    "STS-81": "51.6",
+    "STS-82": "28.5",
+    "STS-83": "28.4",
+    "STS-84": "51.7",
+    "STS-85": "57.0",
+    "STS-86": "51.6",
+    "STS-87": "28.4",
+    "STS-88": "51.6",
+    "STS-89": "51.6",
+    "STS-9": "57.0",
+    "STS-90": "39.0",
+    "STS-91": "51.7",
+    "STS-92": "51.6",
+    "STS-93": "28.4",
+    "STS-94": "28.4",
+    "STS-95": "28.4",
+    "STS-96": "51.6",
+    "STS-97": "51.6",
+    "STS-98": "51.6",
+    "STS-99": "57.0",
+}
+
+# A big amber value centered at cx (smaller white type when it won't fit).
+def draw_big_value_w(c, cx, y, value, maxw):
+    parts = value.split(" ")
+    num = parts[0]
+    unit = " ".join(parts[1:])
+    nw = c.text_width(num, font = "10x14")
+    uw = c.text_width(unit, font = "4x5") if unit != "" else 0
+    total = nw + (2 + uw if unit != "" else 0)
+    if total > maxw:
+        w = c.text_width(value, font = "6x8")
+        draw_outlined_text(c, value, cx - w // 2, y + 4, "6x8", "white", align = "left")
+        return
+    x = cx - total // 2
+    draw_outlined_text(c, num, x, y, "10x14", "amber", align = "left")
+    if unit != "":
+        draw_outlined_text(c, unit, x + nw + 2, y + 8, "4x5", "amber", align = "left")
+
+# "51.6" drawn big with a hand-made decimal point and degree ring (10x14 has
+# neither glyph), centered at cx.
+def draw_degrees(c, cx, y, value):
+    whole, tenths = value.split(".")
+    ww = c.text_width(whole, font = "10x14")
+    tw = c.text_width(tenths, font = "10x14")
+    total = ww + 6 + tw + 6
+    x = cx - total // 2
+    draw_outlined_text(c, whole, x, y, "10x14", "amber", align = "left")
+    dx = x + ww + 2
+    c.rect(dx - 1, y + 11, dx + 2, y + 14, fill = "#000000")
+    c.rect(dx, y + 12, dx + 1, y + 13, fill = "amber")
+    tx = dx + 4
+    draw_outlined_text(c, tenths, tx, y, "10x14", "amber", align = "left")
+    rx = tx + tw + 2
+    c.rect(rx - 1, y - 1, rx + 3, y + 3, fill = "#000000")
+    c.rect(rx, y, rx + 2, y + 2, fill = "amber")
+    c.pixel(rx + 1, y + 1, "#000000")
+
+# Orbit facts: two side by side, or three with the orbit's inclination when
+# the mission has one (Earth orbits only - lunar pages keep their pair).
+def draw_two_facts_lr(c, name, label1, value1, label2, value2):
+    if not draw_patch_background(c, name):
+        c.fill("#000000")
+    inc = INCLINATION.get(name) if label1 == "ORBITS" else None
+    if inc == None:
+        draw_outlined_text(c, label1, 48, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_big_value_w(c, 48, 12, value1, 90)
+        draw_outlined_text(c, label2, 144, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+        draw_big_value_w(c, 144, 12, value2, 90)
+        return
+    draw_outlined_text(c, label1, 32, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_big_value_w(c, 32, 12, value1, 60)
+    draw_outlined_text(c, label2, 96, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_big_value_w(c, 96, 12, value2, 60)
+    draw_outlined_text(c, "INCLINATION", 160, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+    draw_degrees(c, 160, 12, inc)
+
+
+# ------------------------------------------ page 2 + duration (192) ----
+
+# Duration units spelled out ("12 DAYS 21 HRS 20 MIN 5 SEC"); the single
+# letters are kept as a fallback if a duration ever won't fit.
+def duration_groups_words(total_seconds):
+    groups = duration_groups(total_seconds)
+    out = []
+    for num, letter in groups:
+        one = num == "1"
+        if letter == "D":
+            out.append((num, "DAY" if one else "DAYS"))
+        elif letter == "H":
+            out.append((num, "HR" if one else "HRS"))
+        elif letter == "M":
+            out.append((num, "MIN"))
+        else:
+            out.append((num, "SEC"))
+    return out
+
+def draw_duration(c, cx, y, total_seconds, color, num_font = "6x8", num_h = 8):
+    label_font = "5x7"
+    label_h = 7
+    groups = None
+    total_w = 0
+    gap = 4
+    label_gap = 2
+    for gs in [duration_groups_words(total_seconds), duration_groups(total_seconds)]:
+        for g, lg in [(6, 2), (4, 2), (2, 1)]:
+            total_w = duration_width(c, gs, num_font, label_font, g, lg)
+            if total_w <= 188:
+                groups, gap, label_gap = gs, g, lg
+                break
+        if groups != None:
+            break
+    if groups == None:
+        groups = duration_groups(total_seconds)
+        gap, label_gap = 1, 1
+        total_w = duration_width(c, groups, num_font, label_font, gap, label_gap)
+    x = cx - total_w // 2
+    label_y = y + (num_h - label_h)
+    for i in range(len(groups)):
+        num_text, word = groups[i]
+        draw_outlined_text(c, num_text, x, y, num_font, color, align = "left")
+        x += c.text_width(num_text, font = num_font)
+        x += label_gap
+        draw_outlined_text(c, word, x, label_y, label_font, color, align = "left")
+        x += c.text_width(word, font = label_font)
+        if i < len(groups) - 1:
+            x += gap
+
+# The page-2 sentence as three centered lines: what happened / where (gold)
+# / pad or runway and the local time.
+def flight_lines(mission, kind):
+    name, ly, lm, ld, ny, nm, nd, crew = mission
+    times = MISSION_TIMES.get(name, (0, 0, 0, 0, 0, 0))
+    if kind == "LAUNCH":
+        _, _, _, local_h, local_m, abbr = utc_to_local(ly, lm, ld, times[0], times[1], launch_zone_for(name))
+        clock = format_clock(local_h, local_m, times[2]) + " " + abbr
+        site = launch_site_for(name)
+        pad = LAUNCH_PAD.get(name)
+        where = ""
+        if pad != None:
+            where = ("SPACE LAUNCH COMPLEX " + pad[4:]) if pad.startswith("SLC-") else ("PAD " + pad)
+        lead = "LAUNCHED FROM THE" if site == "KENNEDY SPACE CENTER" else "LAUNCHED FROM"
+        return lead, site, (where + " AT " + clock) if where != "" else "AT " + clock
+    if kind == "MOONLAND":
+        moon_y, moon_mo, moon_dy, moon_h, moon_min, moon_sec = MOON_LANDING_TIME[name]
+        _, _, _, local_h, local_m, abbr = utc_to_local(moon_y, moon_mo, moon_dy, moon_h, moon_min, "CENTRAL")
+        lm_name = APOLLO_MODULE_NAMES.get(name, (None, "LUNAR MODULE"))[1]
+        site = MOON_LANDING_SITE.get(name, "THE MOON")
+        return lm_name + " LANDED ON THE MOON IN", site, "AT " + format_clock(local_h, local_m, moon_sec) + " " + abbr
+    nh, nmin, nsec = times[3], times[4], times[5]
+    if END_LABEL_OVERRIDE.get(name, "LANDED") == "LOST":
+        _, _, _, local_h, local_m, abbr = utc_to_local(ny, nm, nd, nh, nmin, "EASTERN")
+        return "LOST DURING", LOST_PHASE.get(name, "FLIGHT"), "AT " + format_clock(local_h, local_m, nsec) + " " + abbr
+    if is_soyuz(name):
+        _, _, _, local_h, local_m, abbr = utc_to_local(ny, nm, nd, nh, nmin, "MSK")
+        lead = "LAUNCH ABORTED - LANDED IN" if name in ABORTED_NAMES else "LANDED IN"
+        return lead, "KAZAKHSTAN", "AT " + format_clock(local_h, local_m, nsec) + " " + abbr
+    if ORBITER.get(name) != None:
+        bucket = SHUTTLE_LANDING_SITE.get(name, "KSC")
+        site_name, zone = LANDING_SITE_INFO[bucket]
+        runway = LANDING_RUNWAY.get(name)
+        _, _, _, local_h, local_m, abbr = utc_to_local(ny, nm, nd, nh, nmin, zone)
+        clock = format_clock(local_h, local_m, nsec) + " " + abbr
+        lead = "LANDED AT THE" if site_name == "KENNEDY SPACE CENTER" else "LANDED AT"
+        return lead, site_name, ("RUNWAY " + runway + " AT " + clock) if runway != None else "AT " + clock
+    ocean_name, zone = OCEAN_INFO[SPLASHDOWN_OCEAN.get(name, "ATLANTIC")]
+    _, _, _, local_h, local_m, abbr = utc_to_local(ny, nm, nd, nh, nmin, zone)
+    return "SPLASHED DOWN IN", ocean_name, "AT " + format_clock(local_h, local_m, nsec) + " " + abbr
+
+def flight(c, ctx):
+    events = find_flight_events(ctx.now.month, ctx.now.day)
+    if len(events) == 0:
+        c.fill("#000000")
+        months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+        c.text("ON THIS DATE", 96, 2, font = "4x5", color = "#888888", align = "center")
+        c.text(months[ctx.now.month - 1] + " " + str(ctx.now.day), 96, 10, font = "6x8", color = "white", align = "center")
+        c.text("NO US LAUNCHES OR LANDINGS", 96, 23, font = "4x5", color = "#888888", align = "center")
+        return
+    mission, kind = events[rotation_index(ctx, len(events))]
+    name = mission[0]
+    draw_patch_background(c, name)
+    draw_outlined_text(c, display_name(name).upper(), 2, 1, "4x5", "white", align = "left")
+    orbiter = ORBITER.get(name)
+    if orbiter != None:
+        draw_outlined_text(c, orbiter.upper(), 96, 1, "4x5", "white", align = "center")
+    draw_outlined_text(c, str(flight_year(mission, kind)), 190, 1, "4x5", "white", align = "right")
+    land_m, land_d = local_land_date(mission)
+    lost = END_LABEL_OVERRIDE.get(name) == "LOST" and land_m == ctx.now.month and land_d == ctx.now.day
+    text_color = LOST_COLOR if lost else "white"
+    lead, place, detail = flight_lines(mission, kind)
+    # One size for the two outer lines so they read as a pair.
+    side_font = "4x5"
+    for f in ["5x7", "4x5"]:
+        if c.text_width(lead, font = f) <= 188 and c.text_width(detail, font = f) <= 188:
+            side_font = f
+            break
+    rows = [(lead, side_font, text_color), (place, "", LOST_COLOR if lost else "amber"), (detail, side_font, text_color)]
+    y = 9
+    for text, f, col in rows:
+        if f == "":
+            text, f = fit_text(c, text, ["5x7", "4x5", "picopixel"], 188)
+        elif c.text_width(text, font = f) > 188:
+            text, f = fit_text(c, text, [f, "picopixel"], 188)
+        draw_outlined_text(c, text, 96, y, f, col, align = "center")
+        y += 8
+
+# Days and hours in words, right-aligned ("12 DAYS 5 HRS").
+def draw_dh_right(c, right_x, y, secs):
+    d = secs // 86400
+    h = (secs % 86400) // 3600
+    parts = [(str(d), "DAY" if d == 1 else "DAYS"), (str(h), "HR" if h == 1 else "HRS")]
+    w = duration_width(c, parts, "6x8", "5x7", 4, 2)
+    x = right_x - w
+    for i in range(len(parts)):
+        num, word = parts[i]
+        draw_outlined_text(c, num, x, y, "6x8", "amber", align = "left")
+        x += c.text_width(num, font = "6x8") + 2
+        draw_outlined_text(c, word, x, y + 1, "5x7", "amber", align = "left")
+        x += c.text_width(word, font = "5x7") + 4
+
+# Landing-day TIME IN SPACE: full names when they fit beside the time.
+def draw_land_flight_times(c, mission):
+    if not draw_patch_background(c, mission[0]):
+        c.fill("#000000")
+    people = [r[0] for r in build_applicable_roster(mission, "LAND") if r[0] in ASTRONAUT_PROFILES]
+    draw_outlined_text(c, "TIME IN SPACE", 96, 1, "4x5", PATCH_LABEL_COLOR, align = "center")
+    if len(people) == 1:
+        draw_outlined_text(c, people[0].upper(), 96, 10, "5x7", "white", align = "center")
+        draw_duration(c, 96, 21, trip_seconds(mission, people[0]), "amber")
+        return
+    for i in range(len(people)):
+        y = 10 + i * 11
+        full = people[i].upper()
+        room = 186 - 100
+        shown, f = fit_text(c, full, ["6x8", "5x7"], room)
+        if shown.endswith(".."):
+            shown, f = fit_text(c, full.split(" ")[-1], ["6x8", "5x7"], room)
+        draw_outlined_text(c, shown, 3, y + (1 if f == "5x7" else 0), f, "white", align = "left")
+        draw_dh_right(c, 189, y, trip_seconds(mission, people[i]))
+
+
+# ----------------------------------------- side-by-side fact pairs (192) ----
+
+# Greedy word wrap into lines no wider than w.
+def wrap_words(c, text, font, w):
+    lines = []
+    cur = ""
+    for word in text.split(" "):
+        trial = word if cur == "" else cur + " " + word
+        if cur != "" and c.text_width(trial, font = font) > w:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = trial
+    if cur != "":
+        lines.append(cur)
+    return lines
+
+# Two label/value facts side by side, each in its own half. Both values use
+# the biggest font that fits them in at most two lines.
+def draw_side_by_side(c, name, label1, value1, label2, value2):
+    if not draw_patch_background(c, name):
+        c.fill("#000000")
+    values = [value1.upper(), value2.upper()]
+    font = "4x5"
+    for f in ["6x8", "5x7", "4x5"]:
+        ok = True
+        for v in values:
+            ls = wrap_words(c, v, f, 90)
+            if len(ls) > 2:
+                ok = False
+            for l in ls:
+                if c.text_width(l, font = f) > 90:
+                    ok = False
+        if ok:
+            font = f
+            break
+    h = FONT_HEIGHTS.get(font, 7)
+    for cx, label, v in [(48, label1, values[0]), (144, label2, values[1])]:
+        draw_outlined_text(c, label, cx, 3, "4x5", PATCH_LABEL_COLOR, align = "center")
+        lines = wrap_words(c, v, font, 90)
+        if len(lines) > 2:
+            lines = lines[:2]
+        top = 11 + (21 - (len(lines) * (h + 2) - 2)) // 2
+        for k in range(len(lines)):
+            t, f2 = fit_text(c, lines[k], [font, "4x5", "picopixel"], 90)
+            draw_outlined_text(c, t, cx, top + k * (h + 2), f2, "white", align = "center")
+
+FONT_HEIGHTS = {"6x8": 8, "5x7": 7, "4x5": 5, "5x5": 5, "picopixel": 5}
+
+def draw_two_facts(c, name, vehicle, ship):
+    draw_side_by_side(c, name, "LAUNCH VEHICLE", vehicle, "RECOVERY SHIP", ship)
+
+def draw_module_names(c, mission_name, cm_name, lm_name):
+    draw_side_by_side(c, mission_name, "COMMAND MODULE", cm_name, "LUNAR MODULE", lm_name)
+
+def draw_label_pairs(c, name, label1, value1, label2, value2):
+    draw_side_by_side(c, name, label1, value1, label2, value2)
+
+def draw_oft_facts(c, name):
+    draw_side_by_side(c, name, "MISSION TYPE", "ORBITAL FLIGHT TEST", "CREW ESCAPE", "EJECTION SEATS")
