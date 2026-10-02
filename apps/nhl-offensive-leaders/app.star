@@ -423,9 +423,10 @@ def draw_leaderboard_computed(c, ctx, pool_specs, value_fn, titles):
     candidates = sorted(candidates, key = neg_value)[:len(ROW_Y)]
     render_leaders(c, lg, titles, season, rank_candidates(candidates))
 
-# The top 40 by PP goals and the top 40 by PP assists between them catch
-# every real PP points leader.
-PP_POOL = [("offensive.powerPlayGoals", 40), ("offensive.powerPlayAssists", 40)]
+# One fetch, not two: with one request per page the app is already at the
+# 8-uncached-requests-per-render cap. The top 100 by points catch every real
+# PP points leader, and stay ~700 KB, under the 1 MB response cap.
+PP_POOL = [("offensive.points", 100)]
 
 # ---------- pages ----------
 
