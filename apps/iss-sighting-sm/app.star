@@ -505,14 +505,48 @@ def evaluate_pass(p, loc, off, cloud_resp, now):
         "end_el": int(final_end_el + 0.5),
     }
 
+# The API key is a required setting, so the only render that ever lacks one is
+# the catalog/review preview (default inputs). Rather than an error card, that
+# preview gets a representative pass - tonight at 9:33:53 PM Eastern, rolled
+# to tomorrow once that's gone by so it always reads as upcoming.
+SAMPLE_OFF = -4.0
+
+def sample_sighting(ctx):
+    now = ctx.now.unix
+    start = now - (now + int(SAMPLE_OFF * 3600.0)) % 86400 + 21 * 3600 + 33 * 60 + 53
+    if start <= now:
+        start += 86400
+    lt = local_from_epoch(start, SAMPLE_OFF)
+    return {
+        "ok": True,
+        "city": "NEW YORK, NY",
+        "now": now,
+        "off": SAMPLE_OFF,
+        "weekday": WEEKDAYS[lt["wd"]] + " " + str(lt["mo"]) + "/" + str(lt["d"]),
+        "cloud_pct": 42,
+        "start": start,
+        "end": start + 577,
+        "duration": 577,
+        "mag": -0.5,
+        "start_az": "WNW",
+        "start_az_deg": 292,
+        "start_el": 10,
+        "max_az": "SW",
+        "max_az_deg": 225,
+        "max_el": 54,
+        "end_az": "SE",
+        "end_az_deg": 135,
+        "end_el": 16,
+    }
+
 def next_sighting(ctx, index = 0):
     zip = _s(ctx, "zip")
     key = _s(ctx, "apikey")
 
+    if not key:
+        return sample_sighting(ctx)
     if not zip:
         return {"ok": False, "title": "NO ZIP CODE", "sub": "ADD ONE IN SETTINGS"}
-    if not key:
-        return {"ok": False, "title": "NO API KEY", "sub": "ADD ONE IN SETTINGS"}
 
     loc = geocode(zip)
     if not loc["ok"]:

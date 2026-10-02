@@ -23,3 +23,4 @@ inputs:
     app_input_type: api-key
     label: N2YO API key
     help: Free key from n2yo.com - sign up, then Account > API Key.
+category: Science
