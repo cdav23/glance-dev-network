@@ -5,7 +5,7 @@ description: Which direction and how high to look for a planet or the Moon from 
 category: Science
 width: 128
 height: 32
-refresh: 900
+refresh: 3600
 pages:
   - look
   - info
