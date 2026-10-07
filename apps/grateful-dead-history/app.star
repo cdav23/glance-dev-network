@@ -210,22 +210,24 @@ GUEST_INSTRUMENT = {
 }
 
 # Who was in the band, by gdsets' lineup id (its 14 Grateful Dead lineups
-# never change, so they live here rather than costing a request).
+# rarely change, so they live here rather than costing a request; when
+# gdsets renumbered them in Oct 2026, &v=2 on the cached URLs flushed
+# listings still carrying the old ids).
 LINEUPS = {
-    "1784": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "BILLY"],
-    "1785": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "MICKEY", "BILLY"],
-    "1786": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "TC", "MICKEY", "BILLY"],
-    "1787": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "MICKEY", "BILLY"],
-    "1788": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "BILLY"],
-    "1789": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "KEITH", "BILLY"],
-    "1790": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "KEITH", "DONNA", "BILLY"],
-    "1791": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "BILLY"],
-    "1792": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "BILLY"],
-    "1793": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "MICKEY", "BILLY"],
-    "1794": ["JERRY", "BOBBY", "PHIL", "BRENT", "MICKEY", "BILLY"],
-    "1795": ["JERRY", "BOBBY", "PHIL", "VINCE", "MICKEY", "BILLY"],
-    "1796": ["JERRY", "BOBBY", "PHIL", "VINCE", "BRUCE", "MICKEY", "BILLY"],
-    "1797": ["JERRY", "BOBBY", "PHIL", "VINCE", "MICKEY", "BILLY"],
+    "1789": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "BILLY"],
+    "1790": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "MICKEY", "BILLY"],
+    "1791": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "TC", "MICKEY", "BILLY"],
+    "1792": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "MICKEY", "BILLY"],
+    "1793": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "BILLY"],
+    "1794": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "KEITH", "BILLY"],
+    "1795": ["JERRY", "BOBBY", "PHIL", "PIGPEN", "KEITH", "DONNA", "BILLY"],
+    "1796": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "BILLY"],
+    "1797": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "BILLY"],
+    "1798": ["JERRY", "BOBBY", "PHIL", "KEITH", "DONNA", "MICKEY", "BILLY"],
+    "1799": ["JERRY", "BOBBY", "PHIL", "BRENT", "MICKEY", "BILLY"],
+    "1800": ["JERRY", "BOBBY", "PHIL", "VINCE", "MICKEY", "BILLY"],
+    "1801": ["JERRY", "BOBBY", "PHIL", "VINCE", "BRUCE", "MICKEY", "BILLY"],
+    "1802": ["JERRY", "BOBBY", "PHIL", "VINCE", "MICKEY", "BILLY"],
 }
 
 # How the notes name each member ("w/o Bruce Hornsby", "John Kahn
@@ -278,7 +280,7 @@ def birthday_note(show, members):
 
 # gdsets gives Ned Lagin's 1974 shows (he and Phil played "Seastones")
 # a lineup of their own, but he was never a member, so he shows as a guest.
-NED_LINEUP = "1792"
+NED_LINEUP = "1797"
 
 JOIN_COLOR = "#3DDC84"
 LEAVE_COLOR = "#FF3B3B"
@@ -655,7 +657,7 @@ def fetch_heads(query):
     # cancelled ones and anything after LAST_SHOW left out; None if the
     # lookup fails. Past shows never change, so it's cached for 30 days.
     resp = http.get(
-        "https://gdsets.com/scripts/q-events-classic.pl?" + query + "&band=Grateful%20Dead",
+        "https://gdsets.com/scripts/q-events-classic.pl?" + query + "&band=Grateful%20Dead&v=2",
         headers = {"User-Agent": USER_AGENT},
         ttl_seconds = 2592000,
     )
@@ -699,7 +701,7 @@ def fetch_guests(show):
     if not show["guests_id"]:
         return []
     resp = http.get(
-        "https://gdsets.com/scripts/tips.pl?guests=" + show["guests_id"],
+        "https://gdsets.com/scripts/tips.pl?guests=" + show["guests_id"] + "&v=2",
         headers = {"User-Agent": USER_AGENT},
         ttl_seconds = 2592000,
     )
@@ -793,7 +795,7 @@ def year_shows(show):
     # Every Grateful Dead show that year with its setlist, from the same
     # cached request as year_heads; [] if the lookup fails.
     resp = http.get(
-        "https://gdsets.com/scripts/q-events-classic.pl?" + year_query(show) + "&band=Grateful%20Dead",
+        "https://gdsets.com/scripts/q-events-classic.pl?" + year_query(show) + "&band=Grateful%20Dead&v=2",
         headers = {"User-Agent": USER_AGENT},
         ttl_seconds = 2592000,
     )
