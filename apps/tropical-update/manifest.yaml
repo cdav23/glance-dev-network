@@ -8,7 +8,7 @@ height: 32
 # Note for the GDN crew: NHC posts advisories every 3-6 hours and hourly
 # Tropical Cyclone Updates near landfall; 600 catches each update within
 # ten minutes, and every NHC product is cached until a newer one is listed.
-refresh: 600
+refresh: 3600
 pages:
 - intro
 - advisory
