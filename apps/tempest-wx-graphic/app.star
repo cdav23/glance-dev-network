@@ -12,11 +12,14 @@
 #             temperature, conditions, today's real high / low with times,
 #             heat index / wind chill (NWS formulas) when one applies.
 #   2 air     humidity, dew point (with a comfort word), pressure + trend, UV
-#   3 wind    wind rose of today's directions, speed, direction, the Beaufort
+#   3 wind    compass dial (red pointer at the side the wind comes from, an
+#             arc over the last 10 minutes' directions), speed, the Beaufort
 #             term (GENTLE / BREEZE), gust, today's high gust, and the last
-#             4 hours as 15-minute bars (average + top gust; station readings
+#             6 hours: an arrow each hour pointing to where the wind came
+#             from, over half-hour bars (average + top gust; station readings
 #             only - no forecast)
-#   4 rain    a 2-inch rain gauge, today's rain and minutes of rain, a 24-hour
+#   4 rain    a 2-inch rain gauge (bluer page, a rain cloud and drops falling
+#             into the tube while it's wet), today's rain and minutes of rain, a 24-hour
 #             rain + lightning timeline with today's strike count, last hour /
 #             yesterday / month / rain days / last strike - becomes a 3-hour
 #             lightning strike map (STORM MODE) while a strike within 10 miles
@@ -2360,6 +2363,65 @@ def forecast_page(c, ctx):
             w = PERIOD_SHORT.get(w, w)
         c.text(w, cx, 25, font = fit_font(c, w, ["4x5", "picopixel"], cw - 3), color = "#a8b4d8", align = "center")
 
+
+DIAL_SPREAD_MIN = 10
+
+# A compass dial (after the Tempest app's wind gauge): a dark face with a warm
+# ring, dim dots at the 16 points, ticks at N / E / S / W (north bright), an
+# arc on the ring over the directions of the last DIAL_SPREAD_MIN minutes (in
+# the wind's color), a red pointer on the ring at the side the wind is coming
+# FROM, and the direction's letters in the middle.
+def wind_dial(c, d, rows, cx, cy, R, deg, speed, col, font):
+    c.fill_circle(cx, cy, R, "#0a1030")
+    for k in range(120):
+        a = math.radians(k * 3)
+        # orange-red at the top fading to amber at the bottom
+        t = (1.0 - math.cos(a)) / 2.0
+        c.pixel(round_int(cx + R * math.sin(a)), round_int(cy - R * math.cos(a)), hexc(mix((232, 84, 40), (200, 150, 30), t)))
+    for k in range(16):
+        if k % 4 == 0:
+            continue
+        a = math.radians(k * 22.5)
+        c.pixel(round_int(cx + (R - 3) * math.sin(a)), round_int(cy - (R - 3) * math.cos(a)), "#3a4570")
+    c.line(cx, cy - R + 2, cx, cy - R + 4, "white")
+    c.line(cx + R - 4, cy, cx + R - 2, cy, "#8090b8")
+    c.line(cx, cy + R - 4, cx, cy + R - 2, "#8090b8")
+    c.line(cx - R + 2, cy, cx - R + 4, cy, "#8090b8")
+    if round_int(speed) == 0:
+        c.fill_circle(cx, cy, 1, "#8fa0cc")
+        return
+    # the arc: how far the direction has swung in the last few minutes
+    lo = 0.0
+    hi = 0.0
+    since = d["ts"] - DIAL_SPREAD_MIN * 60
+    for r in rows:
+        if r[0] < since or r[2] == None or r[4] == None or r[2] <= 0:
+            continue
+        off = ((r[4] - deg + 540) % 360) - 180
+        lo = min(lo, off)
+        hi = max(hi, off)
+    lo = max(lo, -90.0) - 6
+    hi = min(hi, 90.0) + 6
+    a = lo
+    for _ in range(64):
+        if a > hi:
+            break
+        ar = math.radians(deg + a)
+        for rr in [R, R - 1]:
+            c.pixel(round_int(cx + rr * math.sin(ar)), round_int(cy - rr * math.cos(ar)), col)
+        a += 3
+    # the pointer: base on the ring, tip toward the middle
+    fx = math.sin(math.radians(deg))
+    fy = -math.cos(math.radians(deg))
+    hw = 2.5 if R >= 14 else 2.0
+    bx = cx + fx * (R - 1.5)
+    by = cy + fy * (R - 1.5)
+    tx = cx + fx * (R - 5.5)
+    ty = cy + fy * (R - 5.5)
+    fill_triangle(c, tx, ty, bx - fy * hw, by + fx * hw, bx + fy * hw, by - fx * hw, "#E8302A")
+    dn = CARDINAL_NAMES[compass_index(deg)]
+    c.text(dn, cx + 1, cy - (3 if font == "5x7" else 2), font = font, color = "#FF9A2E", align = "center")
+
 # ---------- wind rose ----------
 
 # Beaufort scale names (mph thresholds)
@@ -2379,8 +2441,6 @@ def wind_page(c, ctx):
         return
     draw_bg(c)
     day_start, rows = day_obs_rows(d)
-    sect_sum = [0.0] * 16
-    sect_n = [0] * 16
     W = c.width
     # the graph: 16 bars x 4px, right-aligned 4px from the edge
     nb = 16
@@ -2390,33 +2450,8 @@ def wind_page(c, ctx):
     for r in rows:
         if r[2] == None or r[4] == None:
             continue
-        s = compass_index(r[4])
-        sect_sum[s] += r[2]
-        sect_n[s] += 1
         if r[3] != None and r[3] > best:
             best = r[3]
-
-    cx = 18
-    cy = 16
-    R = 14
-    c.circle(cx, cy, R, "#1c2650")
-    # inner ring = exactly half the top direction's wind (petals are scaled so
-    # today's biggest direction touches the outer ring)
-    c.circle(cx, cy, R // 2, "#18214a")
-    mx = max(sect_sum + [0.001])
-    for s in range(16):
-        if sect_sum[s] <= 0:
-            continue
-        L = max(1.0, R * sect_sum[s] / mx)
-        ang = s * 22.5
-        a0 = math.radians(ang - 6)
-        a1 = math.radians(ang + 6)
-        mean_mph = mps_to_mph(sect_sum[s] / sect_n[s])
-        col = wind_color(mean_mph)
-        if col == "amber":
-            col = "#FFBF00"
-        fill_triangle(c, cx, cy, cx + L * math.sin(a0), cy - L * math.cos(a0), cx + L * math.sin(a1), cy - L * math.cos(a1), col)
-    c.pixel(cx, cy - R, "white")
 
     speed = d["cur"].get("wind_avg", 0.0) or 0.0
     if demo_opt(d, "windmph") != "":
@@ -2424,14 +2459,13 @@ def wind_page(c, ctx):
         d["cur"] = dict(d["cur"])
         d["cur"]["wind_gust"] = speed * 1.5
     deg = d["cur"].get("wind_direction", 0) or 0
+    if demo_opt(d, "winddeg") != "":
+        sh = float(demo_opt(d, "winddeg")) - deg
+        deg = float(demo_opt(d, "winddeg"))
+        rows = [[r[0], r[1], r[2], r[3], (r[4] + sh) % 360 if r[4] != None else None] + r[5:] for r in rows]
     gust = d["cur"].get("wind_gust", 0.0) or 0.0
-    col = "white" if speed == 0 else wind_color(speed)
-    if col == "amber":
-        col = "#FFBF00"
-    if speed > 0:
-        rad = math.radians(deg)
-        c.line(cx, cy, round_int(cx + (R - 1) * math.sin(rad)), round_int(cy - (R - 1) * math.cos(rad)), "white")
-    c.fill_circle(cx, cy, 1, "white")
+    col = "white" if speed == 0 else safe_col(wind_color(speed))
+    wind_dial(c, d, rows, 16, 16, 15, deg, speed, col, "5x7")
 
     s = str(round_int(spd(d, speed)))
     c.text(s, 38, 4, font = "16x20", color = col, align = "left")
@@ -2440,10 +2474,6 @@ def wind_page(c, ctx):
     # font, one word per line (GENTLE / BREEZE)
     bx = 38 + sw + 3
     ux = bx
-    if round_int(speed) > 0:
-        dn = CARDINAL_NAMES[compass_index(deg)]
-        c.text(dn, bx, 2, font = "5x7", color = "white", align = "left")
-        ux = bx + c.text_width(dn, "5x7") + 3
     c.text(spd_unit(d), ux, 4, font = "4x5", color = "#8fa0cc", align = "left")
     bw = beaufort(speed) if round_int(speed) > 0 else "CALM"
     parts = bw.split(" ")
@@ -2460,10 +2490,11 @@ def wind_page(c, ctx):
     hi_g = max(mps_to_mph(best), gust)
     c.text("HI " + str(round_int(spd(d, hi_g))), 38 + 44, 26, font = "4x5", color = wind_color(hi_g) if hi_g > 0 else "white", align = "left")
 
-    # the graph: the last 6 hours as 12 half-hour candles - body up to the
-    # average wind (in its wind color), a thin wick down to the lull, and a
-    # white cap at that half hour's top gust. Today's readings only, so
-    # before 6 AM the slots before midnight stay empty.
+    # the graph: the last 6 hours - an arrow each hour pointing to the side
+    # the wind came from (its average direction, in that hour's wind color),
+    # and under the arrows 12 half-hour bars of the average wind with a white
+    # tick at that half hour's top gust. Today's readings only, so before
+    # 6 AM the slots before midnight stay empty.
     ts = d["ts"]
     nb = 12
     pitch = 5
@@ -2473,7 +2504,8 @@ def wind_page(c, ctx):
     a_sum = [0.0] * nb
     a_n = [0] * nb
     g_max = [0.0] * nb
-    l_min = [99.0] * nb
+    vx = [0.0] * (nb // 2)
+    vy = [0.0] * (nb // 2)
     for r in rows:
         if r[2] == None:
             continue
@@ -2484,15 +2516,17 @@ def wind_page(c, ctx):
         a_n[k] += 1
         if r[3] != None and r[3] > g_max[k]:
             g_max[k] = r[3]
-        if r[1] != None and r[1] < l_min[k]:
-            l_min[k] = r[1]
-    # height scaled to the window's top gust (at least 10 mph, so a light
+        # direction weighted by speed, so a gusty hour isn't swung by its lulls
+        if r[4] != None and r[2] > 0:
+            vx[k // 2] += r[2] * math.sin(math.radians(r[4]))
+            vy[k // 2] += r[2] * math.cos(math.radians(r[4]))
+    # bar height scaled to the window's top gust (at least 10 mph, so a light
     # breeze doesn't look like a gale)
     top = gust
     for k in range(nb):
         top = max(top, mps_to_mph(g_max[k]))
     gmax = max(top * 1.1, 10.0)
-    yt = 8
+    yt = 17
     yb = 24
     for k in range(nb):
         x = x0 + k * pitch
@@ -2501,20 +2535,29 @@ def wind_page(c, ctx):
             continue
         av = mps_to_mph(a_sum[k] / a_n[k])
         gv = max(mps_to_mph(g_max[k]), av)
-        lv = min(mps_to_mph(l_min[k]), av) if l_min[k] < 99.0 else 0.0
+        cc = safe_col(wind_color(av))
         ya = round_int(yb - av / gmax * (yb - yt))
         yg = round_int(yb - gv / gmax * (yb - yt))
-        yl = round_int(yb - lv / gmax * (yb - yt))
-        cc = safe_col(wind_color(av))
-        c.line(x + 1, yg, x + 1, yb, "#3a4680")
-        c.line(x + 2, yg, x + 2, yb, "#3a4680")
-        if ya <= yb:
-            c.rect(x, ya, x + 3, yb, fill = dim_hex(cc, 0.75))
-            c.line(x, ya, x + 3, ya, cc)
-            c.rect(x + 1, yl, x + 2, yb, fill = dim_hex(cc, 0.40))
+        c.rect(x, ya, x + 3, yb, fill = dim_hex(cc, 0.6))
+        c.line(x, ya, x + 3, ya, cc)
         if yg < ya:
-            c.line(x, yg, x + 3, yg, "#d8def8")
-    # every other clock hour under the candles, NOW at the right
+            c.line(x + 1, yg, x + 2, yg, "#d8def8")
+    for h in range(nb // 2):
+        n = a_n[2 * h] + a_n[2 * h + 1]
+        if n == 0 or (vx[h] == 0 and vy[h] == 0):
+            continue
+        cc = safe_col(wind_color(mps_to_mph((a_sum[2 * h] + a_sum[2 * h + 1]) / n)))
+        deg = math.degrees(math.atan2(vx[h], vy[h]))
+        fx = math.sin(math.radians(deg))
+        fy = -math.cos(math.radians(deg))
+        cx = x0 + h * 2 * pitch + 4.5
+        cy = 11.5
+        hx = cx + fx * 3.5
+        hy = cy + fy * 3.5
+        c.line(round_int(cx - fx * 3.5), round_int(cy - fy * 3.5), round_int(hx), round_int(hy), cc)
+        for sgn in [1, -1]:
+            c.line(round_int(hx), round_int(hy), round_int(hx - fx * 2.5 - sgn * fy * 2.5), round_int(hy - fy * 2.5 + sgn * fx * 2.5), cc)
+    # every other clock hour under the bars, NOW at the right
     lab_col = "#55628f"
     c.text("NOW", W - 4, 27, font = "picopixel", color = lab_col, align = "right")
     now_x = W - 4 - c.text_width("NOW", "picopixel") - 3
@@ -3012,6 +3055,49 @@ def month_rain(d):
                 days[(r[0] + d["tz"] * 60) // 86400] = True
     return mm_to_in(tot), len(days)
 
+# The Rain page's backdrop: the usual night-blue, tinted bluer once it has
+# rained today, with faint slanted rain streaks while it's raining (rain in
+# the last hour).
+def rain_bg(c, d):
+    obs = d["obs"]
+    today = obs.get("precip_accum_local_day", 0.0) or 0.0
+    hr = obs.get("precip_accum_last_1hr", 0.0) or 0.0
+    if today <= 0:
+        draw_bg(c)
+        return
+    for y in range(32):
+        c.rect(0, y, c.width - 1, y, fill = hexc(mix((12, 26, 66), (3, 7, 24), y / 31.0)))
+
+# Glass on the gauge: a dim highlight down the tube's left side, brighter
+# where it's in the water.
+def gauge_glass(c, x, x1, ty0, ty1, lvl, raining):
+    c.line(x, ty0 + 1, x, ty1 - 1, "#1c2c60")
+    if lvl < ty1:
+        c.line(x, lvl + 1, x, ty1 - 1, "#a8d4ff")
+    if raining:
+        # drops falling into the tube, above the water
+        for k in range(6):
+            dx = x + 1 + (k * 3) % max(x1 - x - 1, 1)
+            dy = ty0 + 2 + k * 4
+            if dy + 2 < lvl - 1:
+                c.line(dx, dy, dx, dy + 1, "#5ab0ff")
+
+# A rain cloud, drops under it while it's raining (only right of x_clear, so
+# they never touch the minutes of rain under TODAY).
+def rain_cloud(c, x, y, raining, x_clear):
+    col = "#8a9bc8" if raining else "#56648f"
+    c.fill_circle(x + 4, y + 4, 3, col)
+    c.fill_circle(x + 8, y + 3, 4, col)
+    c.fill_circle(x + 12, y + 5, 2, col)
+    c.rect(x + 2, y + 5, x + 13, y + 7, fill = col)
+    c.line(x + 3, y + 3, x + 6, y + 1, "#b8c6e8" if raining else "#7080a8")
+    if raining:
+        for k in range(4):
+            dx = x + 3 + k * 3
+            if dx - 1 <= x_clear:
+                continue
+            c.line(dx, y + 10 + (k % 2), dx - 1, y + 12 + (k % 2), "#3399FF")
+
 def rain_page(c, ctx):
     d = load_all(c, ctx)
     if d == None:
@@ -3020,7 +3106,7 @@ def rain_page(c, ctx):
     if demo_opt(d, "storm") != "off" and storm_active(d):
         lightning_body(c, d)
         return
-    draw_bg(c)
+    rain_bg(c, d)
     obs = d["obs"]
     today_in = mm_to_in(obs.get("precip_accum_local_day", 0.0) or 0.0)
 
@@ -3040,6 +3126,7 @@ def rain_page(c, ctx):
         c.line(tx0 + 1, y, tx1 - 1, y, hexc(mix((90, 170, 255), (20, 80, 220), (y - lvl) / float(max(ty1 - 1 - lvl, 1)))))
     if today_in > 0:
         c.line(tx0 + 1, lvl, tx1 - 1, lvl, "#ffffff" if today_in > cap else "#c8e4ff")
+    gauge_glass(c, tx0 + 1, tx1 - 1, ty0, ty1, lvl, (obs.get("precip_accum_last_1hr", 0.0) or 0.0) > 0)
     c.line(tx0, ty0, tx0, ty1, "#5a6a9a")
     c.line(tx1, ty0, tx1, ty1, "#5a6a9a")
     c.line(tx0, ty1, tx1, ty1, "#5a6a9a")
@@ -3059,6 +3146,9 @@ def rain_page(c, ctx):
     mins = obs.get("precip_minutes_local_day", None)
     if mins != None and mins > 0:
         c.text(format_minutes(mins), 17, 24, font = "4x5", color = "#3399FF", align = "left")
+    if today_in > 0:
+        m_end = 17 + c.text_width(format_minutes(mins), "4x5") + 1 if mins != None and mins > 0 else 0
+        rain_cloud(c, 43, 12, (obs.get("precip_accum_last_1hr", 0.0) or 0.0) > 0, m_end)
 
     # today's timeline: rain bars from the bottom, lightning marks from the top
     day_start, rows = day_obs_rows(d)
@@ -3092,7 +3182,8 @@ def rain_page(c, ctx):
     for i in range(gw):
         if rain[i] > 0:
             h = max(1, round_int(rain[i] / rmax * 11))
-            c.line(gx0 + i, gb - h, gx0 + i, gb, "#3399FF")
+            for y in range(gb - h, gb + 1):
+                c.pixel(gx0 + i, y, hexc(mix((140, 215, 255), (30, 100, 230), (y - (gb - h)) / float(max(h, 1)))))
         if strikes[i] > 0:
             h = max(1, round_int(strikes[i] / float(smax) * 5))
             c.line(gx0 + i, gt, gx0 + i, gt + h - 1, "#FFE040")
