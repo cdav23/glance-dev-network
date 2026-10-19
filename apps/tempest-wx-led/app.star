@@ -13,12 +13,12 @@
 #           heat index / wind chill when one applies, else the next sunrise or
 #           sunset
 #   2 air   humidity, dew point, pressure + trend arrow, UV
-#   3 wind  a wind vane: the arrow starts on the side the wind is coming from
-#           and points the way the air is moving, and
-#           a colored arc on the ring marks where it has mostly come from in
-#           the last 3 hours (VANE_HOURS); speed, direction, the Beaufort
-#           term, gust and today's high gust
-#   4 rain  a 2-inch rain gauge, today's rain and minutes of rain, last hour
+#   3 wind  a compass dial: a red pointer on the ring at the side the wind is
+#           coming from, an arc over the directions of the last 10 minutes,
+#           the direction in the middle; speed, the Beaufort term, gust and
+#           today's high gust
+#   4 rain  a 2-inch rain gauge (bluer page and drops falling into the tube
+#           while it's wet), today's rain and minutes of rain, last hour
 #           (or the last lightning strike's distance), the month - becomes a
 #           LIGHTNING card (distance, minutes ago) while a strike within 10
 #           miles has happened in the last 30 minutes (NWS safety rules)
@@ -2103,10 +2103,12 @@ def mini_wind_page(c, ctx):
         d["cur"]["wind_gust"] = speed * 1.5
     deg = d["cur"].get("wind_direction", 0) or 0
     if demo_opt(d, "winddeg") != "":
+        sh = float(demo_opt(d, "winddeg")) - deg
         deg = float(demo_opt(d, "winddeg"))
+        rows = [[r[0], r[1], r[2], r[3], (r[4] + sh) % 360 if r[4] != None else None] + r[5:] for r in rows]
     gust = d["cur"].get("wind_gust", 0.0) or 0.0
     col = "white" if speed == 0 else safe_col(wind_color(speed))
-    wind_vane(c, d, rows, 14, 16, 11, deg, speed, col)
+    wind_dial(c, d, rows, 13, 16, 12, deg, speed, col, "4x5")
 
     # 2px gaps everywhere (1px runs together on a real LED panel), and a clear
     # row between lines
@@ -2116,13 +2118,10 @@ def mini_wind_page(c, ctx):
     sf = "8x12" if len(s) < 3 else "6x8"
     c.text(s, x0, 0 if sf == "8x12" else 2, font = sf, color = col, align = "left")
     bx = x0 + c.text_width(s, sf) + 2
-    if round_int(speed) > 0:
-        dn = CARDINAL_NAMES[compass_index(deg)]
-        c.text(dn, bx, 0, font = fit_font(c, dn, ["4x5", "picopixel"], c.width - 3 - bx), color = "white", align = "left")
     u = spd_unit(d)
     if bx + c.text_width(u, "picopixel") > c.width - 3:
         u = u.replace("KM/H", "KPH")     # 64 px can't fit KM/H after 2 digits
-    c.text(u, bx, 7, font = "picopixel", color = "#8fa0cc", align = "left")
+    c.text(u, bx, 5, font = "picopixel", color = "#8fa0cc", align = "left")
     # the Beaufort term, one word a line (GENTLE / BREEZE)
     bw = beaufort(speed) if round_int(speed) > 0 else "CALM"
     parts = bw.split(" ")
@@ -2149,6 +2148,33 @@ def mini_wind_page(c, ctx):
         c.text(row[2], x, 26, font = vf, color = safe_col(wind_color(row[1])) if row[1] > 0 else "white", align = "left")
         x += c.text_width(row[2], vf) + 2
 
+# The Rain page's backdrop: the usual night-blue, tinted bluer once it has
+# rained today, with faint slanted rain streaks while it's raining (rain in
+# the last hour).
+def rain_bg(c, d):
+    obs = d["obs"]
+    today = obs.get("precip_accum_local_day", 0.0) or 0.0
+    hr = obs.get("precip_accum_last_1hr", 0.0) or 0.0
+    if today <= 0:
+        draw_bg(c)
+        return
+    for y in range(32):
+        c.rect(0, y, c.width - 1, y, fill = hexc(mix((12, 26, 66), (3, 7, 24), y / 31.0)))
+
+# Glass on the gauge: a dim highlight down the tube's left side, brighter
+# where it's in the water.
+def gauge_glass(c, x, x1, ty0, ty1, lvl, raining):
+    c.line(x, ty0 + 1, x, ty1 - 1, "#1c2c60")
+    if lvl < ty1:
+        c.line(x, lvl + 1, x, ty1 - 1, "#a8d4ff")
+    if raining:
+        # drops falling into the tube, above the water
+        for k in range(6):
+            dx = x + 1 + (k * 3) % max(x1 - x - 1, 1)
+            dy = ty0 + 2 + k * 4
+            if dy + 2 < lvl - 1:
+                c.line(dx, dy, dx, dy + 1, "#5ab0ff")
+
 def mini_rain_page(c, ctx):
     d = load_all(c, ctx)
     if d == None:
@@ -2156,7 +2182,7 @@ def mini_rain_page(c, ctx):
     if demo_opt(d, "storm") != "off" and storm_active(d):
         mini_storm(c, d)
         return
-    draw_bg(c)
+    rain_bg(c, d)
     obs = d["obs"]
     today_in = mm_to_in(obs.get("precip_accum_local_day", 0.0) or 0.0)
     tx0 = 3
@@ -2171,6 +2197,7 @@ def mini_rain_page(c, ctx):
         c.line(tx0 + 1, y, tx1 - 1, y, hexc(mix((90, 170, 255), (20, 80, 220), (y - lvl) / float(max(ty1 - 1 - lvl, 1)))))
     if today_in > 0:
         c.line(tx0 + 1, lvl, tx1 - 1, lvl, "#ffffff" if today_in > cap else "#c8e4ff")
+    gauge_glass(c, tx0 + 1, tx1 - 1, ty0, ty1, lvl, (obs.get("precip_accum_last_1hr", 0.0) or 0.0) > 0)
     c.line(tx0, ty0, tx0, ty1, "#5a6a9a")
     c.line(tx1, ty0, tx1, ty1, "#5a6a9a")
     c.line(tx0, ty1, tx1, ty1, "#5a6a9a")
@@ -2282,58 +2309,61 @@ def mini_next_sun(d):
         return ("SUNRISE", mini_hm(daily[1]["sunrise"], d))
     return ("SUNRISE", mini_hm(rise + 86400, d))
 
-VANE_HOURS = 3
 
-# A wind vane: the ring with a bright tick at north (dim at E / S / W), a
-# colored arc on the ring over the direction the wind has mostly come from in
-# the last VANE_HOURS hours (in that direction's wind color), and the arrow
-# starting on the side the wind is coming from right now and pointing the way
-# the air is moving.
-def wind_vane(c, d, rows, cx, cy, R, deg, speed, col):
-    since = d["ts"] - VANE_HOURS * 3600
-    run = [0.0] * 16
-    spd_sum = [0.0] * 16
-    n = [0] * 16
+DIAL_SPREAD_MIN = 10
+
+# A compass dial (after the Tempest app's wind gauge): a dark face with a warm
+# ring, dim dots at the 16 points, ticks at N / E / S / W (north bright), an
+# arc on the ring over the directions of the last DIAL_SPREAD_MIN minutes (in
+# the wind's color), a red pointer on the ring at the side the wind is coming
+# FROM, and the direction's letters in the middle.
+def wind_dial(c, d, rows, cx, cy, R, deg, speed, col, font):
+    c.fill_circle(cx, cy, R, "#0a1030")
+    for k in range(120):
+        a = math.radians(k * 3)
+        # orange-red at the top fading to amber at the bottom
+        t = (1.0 - math.cos(a)) / 2.0
+        c.pixel(round_int(cx + R * math.sin(a)), round_int(cy - R * math.cos(a)), hexc(mix((232, 84, 40), (200, 150, 30), t)))
+    for k in range(16):
+        if k % 4 == 0:
+            continue
+        a = math.radians(k * 22.5)
+        c.pixel(round_int(cx + (R - 3) * math.sin(a)), round_int(cy - (R - 3) * math.cos(a)), "#3a4570")
+    c.line(cx, cy - R + 2, cx, cy - R + 4, "white")
+    c.line(cx + R - 4, cy, cx + R - 2, cy, "#8090b8")
+    c.line(cx, cy + R - 4, cx, cy + R - 2, "#8090b8")
+    c.line(cx - R + 2, cy, cx - R + 4, cy, "#8090b8")
+    if round_int(speed) == 0:
+        c.fill_circle(cx, cy, 1, "#8fa0cc")
+        return
+    # the arc: how far the direction has swung in the last few minutes
+    lo = 0.0
+    hi = 0.0
+    since = d["ts"] - DIAL_SPREAD_MIN * 60
     for r in rows:
         if r[0] < since or r[2] == None or r[4] == None or r[2] <= 0:
             continue
-        k = compass_index(r[4])
-        run[k] += r[2]
-        spd_sum[k] += r[2]
-        n[k] += 1
-    c.circle(cx, cy, R, "#2a3566")
-    best = -1
-    for k in range(16):
-        if run[k] > 0 and (best < 0 or run[k] > run[best]):
-            best = k
-    if best >= 0:
-        acol = safe_col(wind_color(mps_to_mph(spd_sum[best] / n[best])))
-        for t in range(-15, 16):
-            a = math.radians(best * 22.5 + t)
-            for rr in [R, R - 1]:
-                c.pixel(round_int(cx + rr * math.sin(a)), round_int(cy - rr * math.cos(a)), acol)
-    # compass ticks: north bright, east / south / west dim
-    c.line(cx, cy - R - 1, cx, cy - R + 2, "white")
-    c.line(cx + R - 2, cy, cx + R, cy, "#55628f")
-    c.line(cx, cy + R - 2, cx, cy + R, "#55628f")
-    c.line(cx - R, cy, cx - R + 2, cy, "#55628f")
-    if round_int(speed) == 0:
-        c.fill_circle(cx, cy, 2, "white")
-        return
-    # the arrow: tail on the side the wind comes from, head downwind
-    L = R - 3
-    fx = -math.sin(math.radians(deg))
-    fy = math.cos(math.radians(deg))
-    hx = cx + fx * L
-    hy = cy + fy * L
-    tx = cx - fx * L
-    ty = cy - fy * L
-    px = -fy
-    py = fx
-    bx = hx - fx * 5
-    by = hy - fy * 5
-    # a 2px shaft: the center line plus one beside it, then the head
-    for o in [(0, 0), (1, 0), (0, 1)]:
-        c.line(round_int(tx) + o[0], round_int(ty) + o[1], round_int(bx) + o[0], round_int(by) + o[1], col)
-    fill_triangle(c, hx, hy, bx + px * 4, by + py * 4, bx - px * 4, by - py * 4, col)
-    c.fill_circle(cx, cy, 1, "white")
+        off = ((r[4] - deg + 540) % 360) - 180
+        lo = min(lo, off)
+        hi = max(hi, off)
+    lo = max(lo, -90.0) - 6
+    hi = min(hi, 90.0) + 6
+    a = lo
+    for _ in range(64):
+        if a > hi:
+            break
+        ar = math.radians(deg + a)
+        for rr in [R, R - 1]:
+            c.pixel(round_int(cx + rr * math.sin(ar)), round_int(cy - rr * math.cos(ar)), col)
+        a += 3
+    # the pointer: base on the ring, tip toward the middle
+    fx = math.sin(math.radians(deg))
+    fy = -math.cos(math.radians(deg))
+    hw = 2.5 if R >= 14 else 2.0
+    bx = cx + fx * (R - 1.5)
+    by = cy + fy * (R - 1.5)
+    tx = cx + fx * (R - 5.5)
+    ty = cy + fy * (R - 5.5)
+    fill_triangle(c, tx, ty, bx - fy * hw, by + fx * hw, bx + fy * hw, by - fx * hw, "#E8302A")
+    dn = CARDINAL_NAMES[compass_index(deg)]
+    c.text(dn, cx + 1, cy - (3 if font == "5x7" else 2), font = font, color = "#FF9A2E", align = "center")
