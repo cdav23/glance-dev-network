@@ -5,7 +5,7 @@ category: Weather
 description: Your own WeatherFlow Tempest station on a 64x32 panel - a live sky scene that follows the time of day and the weather with the temperature, today's real high and low and the next sunrise or sunset; humidity, dew point, pressure and UV; a wind compass with speed and gusts; and a rain gauge that turns into a lightning card during storms. NWS warnings take over the display.
 width: 64
 height: 32
-refresh: 180
+refresh: 300
 pages:
   - now
   - air
