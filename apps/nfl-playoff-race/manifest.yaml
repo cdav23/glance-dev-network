@@ -17,9 +17,8 @@ pages:
   - div2
 inputs:
   - key: conference
-    type: dropdown
+    type: string
+    app_input_type: dropdown
     label: Conference
+    choices: [AFC, NFC]
     default: AFC
-    choices:
-      - AFC
-      - NFC
