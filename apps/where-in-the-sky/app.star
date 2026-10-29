@@ -301,11 +301,46 @@ def is_visible(body, alt, sun_alt, elong):
 def is_hard_daylight(body, sun_alt):
     return body in DAYLIGHT_ELONG_MIN and sun_alt > SUN_TWILIGHT_MAX
 
+# Cheap per-day screen so the search can skip days that can't work: the
+# body's highest point (upper culmination, 90 - |lat - dec|) must clear its
+# floor, and for planets that need a dark sky the Sun's lowest point (lower
+# culmination, |lat + dec| - 90) must reach twilight. Declinations are
+# taken at both ends of the day with a margin (the Moon moves ~5 deg/day),
+# so a False here is never wrong. Without this, a midnight-sun location
+# scans all SEARCH_DAYS step by step and the render times out.
+def day_could_be_visible(body, lat, t0):
+    tc0 = julian_centuries(jd_from_unix(t0))
+    tc1 = julian_centuries(jd_from_unix(t0 + 86400))
+    d0 = radec_of(body, tc0)[1]
+    d1 = radec_of(body, tc1)[1]
+    margin = 6.0 if body == "Moon" else 1.0
+    best_dec = clamp(lat, min(d0, d1) - margin, max(d0, d1) + margin)
+    if 90.0 - abs(lat - best_dec) < alt_min_for(body):
+        return False
+    if body == "Moon" or body in DAYLIGHT_ELONG_MIN:
+        return True
+    s0 = sun_radec(tc0)[1]
+    s1 = sun_radec(tc1)[1]
+    sun_dec = clamp(-lat, min(s0, s1) - 0.5, max(s0, s1) + 0.5)
+    return abs(lat + sun_dec) - 90.0 <= SUN_TWILIGHT_MAX
+
 # Coarse pass to find the first visible step, then a 5-minute pass to refine it.
 def find_next_visible(body, lat, lon, now_unix):
-    total_coarse = (SEARCH_DAYS * 86400) // COARSE_STEP_SEC
     prev_t = now_unix
-    for i in range(1, total_coarse + 1):
+    for day in range(SEARCH_DAYS):
+        i_first = (day * 86400) // COARSE_STEP_SEC + 1
+        i_last = ((day + 1) * 86400) // COARSE_STEP_SEC
+        if not day_could_be_visible(body, lat, now_unix + day * 86400):
+            prev_t = now_unix + i_last * COARSE_STEP_SEC
+            continue
+        found = _scan_day(body, lat, lon, now_unix, i_first, i_last, prev_t)
+        if found != None:
+            return found
+        prev_t = now_unix + i_last * COARSE_STEP_SEC
+    return None
+
+def _scan_day(body, lat, lon, now_unix, i_first, i_last, prev_t):
+    for i in range(i_first, i_last + 1):
         t = now_unix + i * COARSE_STEP_SEC
         alt, az, sun_alt, dist, elong, sun_az = state_at(body, lat, lon, t)
         if is_visible(body, alt, sun_alt, elong):
@@ -329,10 +364,13 @@ def find_next_visible(body, lat, lon, now_unix):
         prev_t = t
     return None
 
-# Same search for the end of a window (visible -> not visible), over the
-# full SEARCH_DAYS horizon.
+# Same search for the end of a window (visible -> not visible), over
+# END_SEARCH_DAYS - long enough for any ordinary window; a body that stays
+# up longer (polar night) just drops the "until" line.
+END_SEARCH_DAYS = 7
+
 def find_visible_end(body, lat, lon, start_unix):
-    total_coarse = (SEARCH_DAYS * 86400) // COARSE_STEP_SEC
+    total_coarse = (END_SEARCH_DAYS * 86400) // COARSE_STEP_SEC
     prev_t = start_unix
     for i in range(1, total_coarse + 1):
         t = start_unix + i * COARSE_STEP_SEC
@@ -660,8 +698,151 @@ def plain_direction(az, alt):
     height = "LOW" if alt < 25.0 else ("HIGH" if alt >= 55.0 else "UP")
     return height + " IN THE " + word
 
+# ---------- planet sprites ----------
+
+# Each body is drawn per pixel as a lit sphere (light from the upper left,
+# quantized to hard tones - no anti-aliasing) with its own surface: Jupiter's
+# bands and red spot, Saturn's rings, Mars's polar cap, the Moon's maria and
+# phase. The same function draws a 22px hero and a 7px list bullet.
+PLANET_TONES = {
+    # (shadow, base, highlight)
+    "Moon": ((70, 70, 66), (176, 176, 168), (232, 230, 220)),
+    "Mercury": ((60, 58, 56), (140, 136, 130), (196, 192, 186)),
+    "Venus": ((120, 104, 60), (226, 206, 150), (250, 240, 205)),
+    "Mars": ((96, 30, 8), (193, 68, 14), (232, 120, 60)),
+    "Jupiter": ((110, 80, 46), (200, 161, 101), (238, 214, 170)),
+    "Saturn": ((120, 104, 60), (220, 201, 138), (246, 232, 186)),
+    "Uranus": ((50, 120, 125), (130, 215, 215), (200, 245, 245)),
+    "Neptune": ((24, 40, 120), (60, 100, 220), (130, 165, 245)),
+}
+
+def _rgb_scale(rgb, k):
+    return (min(255, int(rgb[0] * k)), min(255, int(rgb[1] * k)), min(255, int(rgb[2] * k)))
+
+def _noise(x, y):
+    # cheap deterministic texture, 0-16
+    return (x * 37 + y * 91 + x * y * 13 + (x * x) % 7) % 17
+
+# Dark patches as (u, v, radius) on the unit disc: the Moon's big maria
+# (Imbrium, Serenitatis, Tranquillitatis, Procellarum, Nubium), Mercury's craters.
+CRATERS = {
+    "Moon": [(-0.25, -0.35, 0.28), (0.15, -0.30, 0.20), (0.30, 0.0, 0.24), (-0.50, 0.05, 0.25), (-0.15, 0.45, 0.17)],
+    "Mercury": [(-0.35, -0.30, 0.18), (0.30, -0.45, 0.12), (0.20, 0.25, 0.20), (-0.40, 0.40, 0.12), (0.55, 0.0, 0.10)],
+}
+
+def _surface(body, u, v, x, y, tones):
+    # Base color at sphere coordinates u (right) / v (down), each -1..1.
+    shadow, base, hi = tones
+    if body == "Jupiter":
+        band = int((v + 1.0) * 4.5)
+        col = base if band % 2 == 0 else _rgb_scale(base, 0.72)
+        if abs(v) < 0.12:
+            col = hi
+        du, dv = (u - 0.30) / 0.30, (v - 0.38) / 0.16
+        if du * du + dv * dv <= 1.0:
+            col = (200, 80, 50)
+        return col
+    if body == "Saturn":
+        return base if int((v + 1.0) * 3.5) % 2 == 0 else _rgb_scale(base, 0.86)
+    if body == "Mars":
+        if v < -0.72:
+            return (240, 240, 235)
+        return _rgb_scale(base, 0.75) if _noise(x, y) < 4 else base
+    if body == "Venus":
+        return hi if int((v + u * 0.4 + 1.0) * 3.0) % 2 == 0 else base
+    if body == "Mercury" or body == "Moon":
+        for cu, cv, cr in CRATERS[body]:
+            du, dv = u - cu, v - cv
+            if du * du + dv * dv <= cr * cr:
+                return _rgb_scale(base, 0.66)
+        return base
+    if body == "Neptune":
+        du, dv = (u + 0.25) / 0.20, (v - 0.25) / 0.11
+        if du * du + dv * dv <= 1.0:
+            return (20, 30, 90)
+        return hi if abs(v + 0.35) < 0.08 else base
+    return base
+
+def _ring_pixel(rx, ry, r, tilt):
+    # inside Saturn's ring band? (ellipse annulus, flattened by tilt)
+    a = rx / r
+    b = ry / (r * tilt)
+    d = a * a + b * b
+    return d >= 1.55 * 1.55 and d <= 2.2 * 2.2
+
+def draw_body(c, body, cx, cy, r, phase = None, dim = 1.0):
+    # phase: (illuminated fraction, waxing) for the Moon - unlit side drawn dark
+    tones = PLANET_TONES[body]
+    if dim != 1.0:
+        tones = (_rgb_scale(tones[0], dim), _rgb_scale(tones[1], dim), _rgb_scale(tones[2], dim))
+    ring = None
+    if body == "Saturn":
+        ring = ((214, 190, 120), 0.32)
+    elif body == "Uranus" and r >= 6:
+        ring = ((110, 170, 175), 0.32)
+    if ring != None:
+        rc = _rgb_scale(ring[0], dim)
+        span = int(r * 2.2) + 1
+        hh = int(r * ring[1] * 2.2) + 1
+        for ry in range(-hh, hh + 1):
+            for rx in range(-span, span + 1):
+                # back half of the ring is hidden behind the globe
+                if _ring_pixel(rx, ry, r, ring[1]) and not (ry < 0 and rx * rx + ry * ry <= r * r):
+                    c.pixel(cx + rx, cy + ry, rc if (rx + ry) % 5 != 0 else _rgb_scale(rc, 0.7))
+    rr = r * r + r  # rounder disc edge at small radii
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            d2 = dx * dx + dy * dy
+            if d2 > rr:
+                continue
+            if ring != None and dy > 0 and _ring_pixel(dx, dy, r, ring[1]):
+                continue  # front half of the ring crosses the globe
+            u = float(dx) / r
+            v = float(dy) / r
+            nz = math.sqrt(max(0.0, 1.0 - (u * u + v * v)))
+            lit = -0.55 * u - 0.45 * v + 0.70 * nz
+            col = _surface(body, u, v, cx + dx, cy + dy, tones)
+            if lit > 0.80:
+                col = _rgb_scale(col, 1.18)
+            elif lit < 0.15:
+                col = tones[0]
+            elif lit < 0.40:
+                col = _rgb_scale(col, 0.72)
+            if phase != None:
+                f, waxing = phase
+                w = math.sqrt(max(0.0, r * r - dy * dy))
+                edge = w * (1.0 - 2.0 * f)
+                on = dx >= edge if waxing else dx <= -edge
+                if not on:
+                    col = (36, 36, 40)
+            c.pixel(cx + dx, cy + dy, col)
+
+# A few fixed dim stars behind a sprite zone.
+STARS = [(2, 3), (11, 26), (5, 17), (30, 2), (36, 28), (24, 30), (39, 9), (1, 25), (17, 1), (33, 21)]
+
+def draw_stars(c, x0):
+    for sx, sy in STARS:
+        c.pixel(x0 + sx, sy, "#3C4258" if (sx + sy) % 3 else "#6A7290")
+
+def draw_compass(c, cx, cy, r, az, accent):
+    c.circle(cx, cy, r, "#3A3F4B")
+    c.text("N", cx + 1, cy - r - 6, font = "picopixel", color = "#8A94A8", align = "center")
+    rad = math.radians(az)
+    tx = cx + (r - 2) * math.sin(rad)
+    ty = cy - (r - 2) * math.cos(rad)
+    c.line(cx, cy, int(tx + 0.5), int(ty + 0.5), color = accent)
+    c.fill_circle(int(tx + 0.5), int(ty + 0.5), 1, accent)
+    c.pixel(cx, cy, "white")
+
+def moon_phase_now(lat, lon, unix):
+    e0 = state_at("Moon", lat, lon, unix)[4]
+    e1 = state_at("Moon", lat, lon, unix + 3600)[4]
+    return illum_from_elong(e0), e1 > e0
+
 # ---------- pages ----------
 
+# Look: sprite of the body left, where to look in the middle, a compass
+# needle at the bearing right. Inside the scroll safe zone (x 6-185).
 def look(c, ctx):
     got = page_setup(c, ctx)
     if got == None:
@@ -670,38 +851,59 @@ def look(c, ctx):
     accent = BODY_COLOR[body]
     now = ctx.now.unix
     alt, az, sun_alt, dist, elong, _ = state_at(body, loc["lat"], loc["lon"], now)
-    cx = c.width // 2
+    visible = is_visible(body, alt, sun_alt, elong)
     c.fill("black")
-    body_header(c, body, auto, loc["city"], accent)
-    if is_visible(body, alt, sun_alt, elong):
+    draw_stars(c, 4)
+    phase = moon_phase_now(loc["lat"], loc["lon"], now) if body == "Moon" else None
+    draw_body(c, body, 26, 16, 11 if body != "Saturn" else 8, phase = phase, dim = 1.0 if visible else 0.45)
+
+    tx = 46
+    c.text(body.upper(), tx, 1, font = "6x8", color = accent)
+    x = tx + c.text_width(body.upper(), "6x8") + 4
+    if auto:
+        c.text("BEST TONIGHT", x, 2, font = "picopixel", color = "#F5C542")
+        x += c.text_width("BEST TONIGHT", "picopixel") + 4
+    # Full "NEW YORK CITY, NY", else drop the state, else whole words.
+    city = loc["city"]
+    words = city.split(",")[0].split(" ")
+    tries = [city] + [" ".join(words[:n]) for n in range(len(words), 0, -1)]
+    for cand in tries:
+        if c.text_width(cand, "picopixel") <= 185 - x:
+            c.text(cand, 185, 2, font = "picopixel", color = "gray", align = "right")
+            break
+
+    if visible:
+        c.text("LOOK " + compass_name(az), tx, 11, font = "10x16", color = "white")
+        foot = str(int(alt + 0.5)) + " DEG UP"
+        c.text(foot, tx, 27, font = "4x5", color = accent)
+        fx = tx + c.text_width(foot, "4x5") + 6
         if is_hard_daylight(body, sun_alt):
-            c.text("DAYLIGHT", cx, 10, font = "6x8", color = "orange", align = "center")
-            c.text("LOOK CAREFULLY", cx, 19, font = "5x7", color = "gray", align = "center")
+            c.text("DAYLIGHT - LOOK CAREFULLY", fx, 27, font = "4x5", color = "orange")
         else:
-            c.text("LOOK " + compass_name(az), cx, 10, font = "6x8", color = "white", align = "center")
-            c.text(str(int(alt + 0.5)) + " DEG UP", cx, 19, font = "5x7", color = accent, align = "center")
-        end_t = find_visible_end(body, loc["lat"], loc["lon"], now)
-        if end_t != None and off != None:
-            c.text(fit_times(c, format_until(off, now, end_t), c.width - 8), cx, 27, font = "4x5", color = "gray", align = "center")
-    else:
-        nxt = find_next_visible(body, loc["lat"], loc["lon"], now)
-        c.text("NOT VISIBLE NOW", 4, 10, font = "4x5", color = "gray")
-        if nxt == None:
-            c.text("NO WINDOW IN NEXT " + str(SEARCH_DAYS) + " DAYS", 4, 16, font = "4x5", color = "gray")
-        elif off == None:
-            c.text("NEXT VISIBLE TIME UNKNOWN", 4, 16, font = "4x5", color = "gray")
-        else:
-            end_t = find_visible_end(body, loc["lat"], loc["lon"], nxt["unix"])
-            if end_t != None:
-                period = format_period(off, nxt["unix"], end_t)
-            else:
-                lt = local_from_epoch(nxt["unix"], off)
-                period = WEEKDAYS[lt["wd"]] + " " + str(lt["mo"]) + "/" + str(lt["d"]) + " " + hms_ap(lt["h"], lt["mi"])
-            c.text(fit_times(c, period, c.width - 8), 4, 16, font = "4x5", color = "white")
-            nxt_sun_alt = state_at(body, loc["lat"], loc["lon"], nxt["unix"])[2]
-            suffix = " (DAYLIGHT)" if is_hard_daylight(body, nxt_sun_alt) else ""
-            c.text(compass_name(nxt["az"]) + " AT " + str(int(nxt["alt"] + 0.5)) + " DEG UP" + suffix, 4, 22, font = "4x5", color = accent)
-    draw_page_edges(c, left = True)
+            end_t = find_visible_end(body, loc["lat"], loc["lon"], now)
+            if end_t != None and off != None:
+                c.text("UNTIL " + day_hm(off, end_t, now), fx, 27, font = "4x5", color = "gray")
+        draw_compass(c, 175, 21, 7, az, accent)
+        return
+
+    nxt = find_next_visible(body, loc["lat"], loc["lon"], now)
+    if nxt == None or off == None:
+        c.text("NOT UP", tx, 11, font = "10x16", color = "gray")
+        msg = "NONE IN THE NEXT " + str(SEARCH_DAYS) + " DAYS" if nxt == None else "NEXT TIME UNKNOWN"
+        c.text(msg, tx, 27, font = "4x5", color = "gray")
+        return
+    c.text("NEXT", tx, 11, font = "10x16", color = "gray")
+    c.text(hm_short(local_from_epoch(nxt["unix"], off)), tx + c.text_width("NEXT ", "10x16"), 11, font = "10x16", color = "white")
+    lt = local_from_epoch(nxt["unix"], off)
+    day = WEEKDAYS[lt["wd"]] + " " + str(lt["mo"]) + "/" + str(lt["d"])
+    c.text(day, tx, 27, font = "4x5", color = "white")
+    fx = tx + c.text_width(day, "4x5") + 6
+    nxt_sun_alt = state_at(body, loc["lat"], loc["lon"], nxt["unix"])[2]
+    where = compass_name(nxt["az"]) + " " + str(int(nxt["alt"] + 0.5)) + " DEG UP"
+    if is_hard_daylight(body, nxt_sun_alt):
+        where += " IN DAYLIGHT"
+    c.text(where, fx, 27, font = "4x5", color = accent)
+    draw_compass(c, 175, 21, 7, nxt["az"], "#5A6070")
 
 def aim(c, ctx):
     got = page_setup(c, ctx)
