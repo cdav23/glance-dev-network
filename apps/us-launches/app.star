@@ -13,7 +13,8 @@
 # (SUCCESS / FAILURE / PARTIAL), then steps aside - sooner if the next launch
 # is within two hours or already live.
 #
-# Sources, all keyless:
+# Sources, all keyless (8 uncached requests per render across every page,
+# so each launch gets one detailed request and Open-Meteo one call):
 #   Launch Library 2    ll.thespacedevs.com (15 requests/hour free, so the
 #                       launch list is cached 15 minutes)
 #   zippopotam.us       zip -> latitude/longitude
@@ -227,8 +228,9 @@ def viewer(ctx):
     om = http.get(
         "https://api.open-meteo.com/v1/forecast",
         params = {"latitude": str(lat), "longitude": str(lon), "daily": "sunrise,sunset",
-                  "current": "is_day", "timezone": "auto", "timeformat": "unixtime", "forecast_days": "16"},
-        ttl_seconds = 21600,
+                  "current": "is_day,cloud_cover,weather_code", "hourly": "cloud_cover",
+                  "timezone": "auto", "timeformat": "unixtime", "forecast_days": "16"},
+        ttl_seconds = 900,
     )
     j = om["json"] if om["status_code"] == 200 and type(om["json"]) == "dict" else {}
     daily = j.get("daily") or {}
@@ -243,6 +245,8 @@ def viewer(ctx):
         "zone": zone_info(j, ctx.now.unix),
         "rise": daily.get("sunrise") or [],
         "set": daily.get("sunset") or [],
+        "current": j.get("current"),
+        "hourly": j.get("hourly") or {},
     }
 
 def sky_at(v, unix):
@@ -273,17 +277,26 @@ def sky_at(v, unix):
 # ---------- booster and landing ----------
 # The detailed launch record names the first-stage booster, its flight count
 # and where it lands. A return-to-launch-site landing near you means sonic
-# booms. One request per shown launch, cached two hours (boosters are
-# assigned days ahead and rarely change).
+# booms. One request per shown launch, cached 30 minutes and shared with
+# the delay check below.
+
+def launch_detail(l):
+    # The detailed record (booster, landing and the update log), or None.
+    if l.get("id") == None:
+        return None
+    r = http.get("https://ll.thespacedevs.com/2.3.0/launches/" + str(l["id"]) + "/",
+                 params = {"mode": "detailed"}, ttl_seconds = 1800)
+    if r["status_code"] != 200 or type(r["json"]) != "dict":
+        return None
+    return r["json"]
 
 def booster_info(l):
     if l.get("id") == None:
         return l.get("_booster")
-    r = http.get("https://ll.thespacedevs.com/2.3.0/launches/" + str(l["id"]) + "/",
-                 params = {"mode": "detailed"}, ttl_seconds = 7200)
-    if r["status_code"] != 200 or type(r["json"]) != "dict":
+    j = launch_detail(l)
+    if j == None:
         return None
-    for st in ((r["json"].get("rocket") or {}).get("launcher_stage") or []):
+    for st in ((j.get("rocket") or {}).get("launcher_stage") or []):
         ln = st.get("launcher") or {}
         ld = st.get("landing") or {}
         loc = ld.get("landing_location") or ld.get("location") or {}
@@ -313,7 +326,7 @@ def booster_line(b):
 # 31 at 03:48 UTC", "Delayed to NET November 10"). When the newest target is
 # later than the one before, the launch slipped. For 24 hours after that
 # announcement the status chip says DELAYED; the "DELAYED FROM ..." note on
-# the launch page stays until it flies. One cached request per shown launch.
+# the launch page stays until it flies. Read from the same detailed record.
 
 MONTH_IDX = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8,
              "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
@@ -353,14 +366,11 @@ def target_of(comment, created):
 def delay_info(l, now):
     # {"from": old unix, "count": slips in a row, "at": when announced,
     # "fresh": announced within 24 hours} or None.
-    if l.get("id") == None:
-        return None
-    r = http.get("https://ll.thespacedevs.com/2.3.0/updates/",
-                 params = {"launch": str(l["id"]), "limit": "10"}, ttl_seconds = 1800)
-    if r["status_code"] != 200 or type(r["json"]) != "dict":
+    j = launch_detail(l)
+    if j == None:
         return None
     targets = []
-    for u in (r["json"].get("results") or []):
+    for u in (j.get("updates") or [])[:10]:
         t = target_of(u.get("comment"), u.get("created_on"))
         if t != None:
             targets.append([parse_iso(u.get("created_on")) or 0, t])
@@ -839,13 +849,9 @@ def draw_icon(c, name, x, y):
 # the launch hour. Heavy cloud knocks a LIKELY down to MAYBE.
 
 def clouds_at(v, t):
-    r = http.get("https://api.open-meteo.com/v1/forecast",
-                 params = {"latitude": str(v["lat"]), "longitude": str(v["lon"]), "hourly": "cloud_cover",
-                           "timezone": "GMT", "timeformat": "unixtime", "forecast_days": "16"},
-                 ttl_seconds = 3600)
-    if t == None or r["status_code"] != 200 or type(r["json"]) != "dict":
+    if t == None:
         return None
-    h = r["json"].get("hourly") or {}
+    h = v["hourly"]
     times = h.get("time") or []
     cover = h.get("cloud_cover") or []
     hour = (t // 3600) * 3600
@@ -1062,6 +1068,7 @@ def week(c, ctx):
     ls = week_launches(now)
     if ls == None:
         return message(c, "LAUNCH DATA OFFLINE", "TRYING AGAIN SOON", AMBER)
+    shown = [x.get("id") for x in (fetch_launches(now) or [])]
     right = c.width - PAD - 1
     c.text("THIS WEEK", PAD, 1, font = "5x7", color = INK)
     n = len(ls)
@@ -1084,7 +1091,7 @@ def week(c, ctx):
     y = 9
     for l in rows:
         t = parse_iso(l.get("net"))
-        st = shown_status(l, now)
+        st = shown_status(l, now) if l.get("id") in shown else status_of(l, now)
         c.fill_circle(PAD + 1, y + 2, 1, st[1])
         if exact_time(l):
             when = day_date(t, local_offset(v["zone"], t))[:3] + " " + clock(t, v["zone"])
@@ -1526,16 +1533,12 @@ def draw_pad(c, day):
 
 # ---------- weather over the scene ----------
 # The zip's current conditions from Open-Meteo (WMO weather codes plus
-# cloud cover), cached 15 minutes, drawn over the live sky.
+# cloud cover, from the viewer's forecast call), drawn over the live sky.
 
 def weather_kind(v):
-    r = http.get("https://api.open-meteo.com/v1/forecast",
-                 params = {"latitude": str(v["lat"]), "longitude": str(v["lon"]),
-                           "current": "cloud_cover,weather_code", "timezone": "auto"},
-                 ttl_seconds = 900)
-    if r["status_code"] != 200 or type(r["json"]) != "dict":
+    cur = v["current"]
+    if type(cur) != "dict":
         return "clear"
-    cur = r["json"].get("current") or {}
     code = int(cur.get("weather_code") or 0)
     cover = int(cur.get("cloud_cover") or 0)
     if code >= 95:
