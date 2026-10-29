@@ -2,14 +2,14 @@ id: forecast-discussion
 name: Forecast Discussion
 author: cfdmb
 category: Weather
-description: Your local National Weather Service forecasters' Area Forecast Discussion in plain English - the key messages and what changed since the last forecast, with the weather jargon translated, plus picture tiles for the biggest weather topics checked against your own zip code's forecast.
+description: Your local National Weather Service forecasters' Area Forecast Discussion in plain English - the key messages and what changed since the last forecast, with the weather jargon translated, plus picture tiles for the biggest weather topics checked against your own zip code's forecast, and that forecast itself on any pages the discussion doesn't need.
 width: 192
 height: 32
 # Note for the GDN crew: NWS offices issue a new discussion every few
 # hours (about 6 a day, typically 4-5 hours apart); 900 shows each new
 # one within about 25 minutes, and each issued discussion is cached for a
 # day since it never changes.
-refresh: 900
+refresh: 1800
 pages:
   - intro
   - point1
