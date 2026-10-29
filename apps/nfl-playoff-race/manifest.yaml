@@ -5,7 +5,7 @@ description: The NFL playoff picture for one conference - seeds if the season en
 category: Sports
 width: 192
 height: 32
-refresh: 600
+refresh: 3600
 pages:
   - intro
   - leaders
